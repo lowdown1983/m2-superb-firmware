@@ -1,0 +1,10 @@
+# SuperB OTA partition table — Phase 11 (2026-10-08).
+# 4 MB flash (INFERRED: standard WROOM-32D size; hardware audit lists flash
+# size as an open question). Two OTA app slots (~1.9 MB each), NVS,
+# otadata, and a small SPIFFS (unused by firmware today; kept for future).
+# Name,   Type, SubType, Offset,  Size, Flags
+nvs,      data, nvs,     0x9000,  0x5000,
+otadata,  data, ota,     0xe000,  0x2000,
+app0,     app,  ota_0,   0x10000, 0x1E0000,
+app1,     app,  ota_1,   0x1F0000,0x1E0000,
+spiffs,   data, spiffs,  0x3D0000,0x30000,

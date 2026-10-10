@@ -1,0 +1,161 @@
+diff -u -r orig/src/m2/mm_channel.h new/src/m2/mm_channel.h
+--- orig/src/m2/mm_channel.h	2026-10-08 14:27:04.071381881 +0000
++++ new/src/m2/mm_channel.h	2026-10-08 14:27:59.332464175 +0000
+@@ -16,6 +16,10 @@
+ //     commands.
+ //   - In ELM mode the byte pump diverts F1 7E before line assembly; 0xF1
+ //     never appears in legitimate AT text.
++//   - F4: the M2 escapes data-plane 0xF1 as F1 00 (the SuperB unescapes
++//     before broadcast), so binary GVRET data can never form an F1 7E pair
++//     on the wire. Only M2RET's data plane needed this; every other mode
++//     is text.
+ //   - The SuperB filters app->M2 traffic and drops any F1 7E pair, so a
+ //     connected app (Torque/SavvyCAN/pen-test tool) can NEVER inject a
+ //     control frame. The M2 also only honors frames arriving on Serial.
+diff -u -r orig/src/m2/mode_m2ret.cpp new/src/m2/mode_m2ret.cpp
+--- orig/src/m2/mode_m2ret.cpp	2026-10-08 14:27:04.067106255 +0000
++++ new/src/m2/mode_m2ret.cpp	2026-10-08 14:27:41.691463491 +0000
+@@ -87,6 +87,27 @@
+ //   len + (bus<<4), data bytes, trailing 0x00.
+ // M2RET buffers and flushes every ~2ms; Phase 1 writes directly (simpler;
+ // the Bee UART at 115200 is the bottleneck either way).
++//
++// F4 (audit fix): escape 0xF1 as F1 00 on the data plane. The SuperB's RX
++// diverter treats any F1 7E pair on the Bee link as a control frame, and
++// raw binary GVRET bytes (timestamps, IDs, CAN payload) can contain that
++// pair — the diverter would silently swallow bytes from the app stream.
++// Escaping every data-plane 0xF1 makes the wire unambiguous; the SuperB
++// unescapes before broadcast, so apps see the pristine GVRET stream.
++// Control frames (mm::sendReply) bypass this helper and stay unescaped.
++void dataWrite(const uint8_t* data, size_t len)
++{
++    for (size_t i = 0; i < len; i++) {
++        if (data[i] == 0xF1) {
++            Serial.write((uint8_t)0xF1);
++            Serial.write((uint8_t)0x00);
++        } else {
++            Serial.write(data[i]);
++        }
++    }
++}
++void dataWriteByte(uint8_t b) { dataWrite(&b, 1); }
++
+ void emitFrame(const CAN_FRAME& frame, uint8_t whichBus)
+ {
+     uint32_t now = micros();
+@@ -104,11 +125,11 @@
+     hdr[8] = (uint8_t)(id >> 16);
+     hdr[9] = (uint8_t)(id >> 24);
+     hdr[10] = (frame.length & 0x0F) | (uint8_t)(whichBus << 4);
+-    Serial.write(hdr, 11);
++    dataWrite(hdr, 11);
+     for (uint8_t c = 0; c < frame.length && c < 8; c++) {
+-        Serial.write(frame.data.bytes[c]);
++        dataWriteByte(frame.data.bytes[c]);
+     }
+-    Serial.write((uint8_t)0x00);  // trailing zero (CommProtocol.txt)
++    dataWriteByte(0x00);  // trailing zero (CommProtocol.txt)
+ }
+ 
+ void sendCanFrame(uint8_t bus, const CAN_FRAME& frame)
+@@ -164,7 +185,7 @@
+             uint8_t r[6] = {0xF1, PROTO_TIME_SYNC,
+                 (uint8_t)(now & 0xFF), (uint8_t)(now >> 8),
+                 (uint8_t)(now >> 16), (uint8_t)(now >> 24)};
+-            Serial.write(r, 6);
++            dataWrite(r, 6);
+             break;
+         }
+         case PROTO_DIG_INPUTS: {
+@@ -179,7 +200,7 @@
+             // during connect, so the difference is unobservable in practice.
+             uint8_t r[4] = {0xF1, PROTO_DIG_INPUTS, 0x00, 0x00};
+             r[3] = checksumCalc(r, 3);
+-            Serial.write(r, 4);
++            dataWrite(r, 4);
+             break;
+         }
+         case PROTO_ANA_INPUTS: {
+@@ -187,7 +208,7 @@
+             // values (M2RET.ino:864-879).
+             uint8_t r[17] = {0xF1, PROTO_ANA_INPUTS};
+             r[16] = checksumCalc(r, 9);  // M2RET checksums first 9 bytes only
+-            Serial.write(r, 17);
++            dataWrite(r, 17);
+             break;
+         }
+         case PROTO_SET_DIG_OUT:
+@@ -204,14 +225,14 @@
+             r[7] = (can1Enabled ? 1 : 0) | (can1ListenOnly ? 0x10 : 0);
+             r[8] = can1Speed & 0xFF; r[9] = (can1Speed >> 8) & 0xFF;
+             r[10] = (can1Speed >> 16) & 0xFF; r[11] = (can1Speed >> 24) & 0xFF;
+-            Serial.write(r, 12);
++            dataWrite(r, 12);
+             break;
+         }
+         case PROTO_GET_DEV_INFO: {
+             // SIMPLIFICATION: build 1, zeros for EEPROM/file/autostart
+             // fields (no persistence in Phase 1). M2RET.ino:914-924.
+             uint8_t r[8] = {0xF1, PROTO_GET_DEV_INFO, 1, 0, 0, 0, 0, 0};
+-            Serial.write(r, 8);
++            dataWrite(r, 8);
+             break;
+         }
+         case PROTO_SET_SW_MODE:
+@@ -219,7 +240,7 @@
+         case PROTO_KEEPALIVE: {
+             // VERIFIED: M2RET.ino:945-951. "if it isn't dead it responds DEAD"
+             uint8_t r[4] = {0xF1, PROTO_KEEPALIVE, 0xDE, 0xAD};
+-            Serial.write(r, 4);
++            dataWrite(r, 4);
+             break;
+         }
+         case PROTO_SET_SYSTYPE:
+@@ -229,7 +250,7 @@
+         case PROTO_GET_NUMBUSES: {
+             // VERIFIED: M2RET.ino:967-972. 3 = CAN0, CAN1, SWCAN.
+             uint8_t r[3] = {0xF1, PROTO_GET_NUMBUSES, 3};
+-            Serial.write(r, 3);
++            dataWrite(r, 3);
+             break;
+         }
+         case PROTO_GET_EXT_BUSES: {
+@@ -242,7 +263,7 @@
+             r[5] = (swcanSpeed >> 16) & 0xFF; r[6] = (swcanSpeed >> 24) & 0xFF;
+             r[7] = 0; r[8] = 0; r[9] = 0; r[10] = 0; r[11] = 0;      // LIN1
+             r[12] = 0; r[13] = 0; r[14] = 0; r[15] = 0; r[16] = 0;   // LIN2
+-            Serial.write(r, 17);
++            dataWrite(r, 17);
+             break;
+         }
+         case PROTO_SET_EXT_BUSES:
+diff -u -r orig/src/superb/main.cpp new/src/superb/main.cpp
+--- orig/src/superb/main.cpp	2026-10-08 14:27:04.075889496 +0000
++++ new/src/superb/main.cpp	2026-10-08 14:27:59.344464176 +0000
+@@ -18,6 +18,10 @@
+ //   2. RX DIVERTER (M2 -> apps): F1 7E frames from the M2 are extracted and
+ //      routed to the pending web-GUI request instead of being broadcast to
+ //      apps. Everything else broadcasts as before.
++//   F4 (audit fix): the M2 escapes data-plane 0xF1 as F1 00, so binary
++//   GVRET data can never present a raw F1 7E pair on the wire. The diverter
++//   unescapes (F1 00 -> F1) before broadcast; apps see the pristine stream.
++//   Control frames (F1 7E ...) are sent unescaped by the M2 and still divert.
+ //   The web GUI sends commands with mmTransact() and matches replies by
+ //   command byte.
+ //
+@@ -136,8 +140,15 @@
+             break;
+         case DState::GOT_F1:
+             if (c == CH) { ds = DState::LEN; }
++            else if (c == 0x00) {
++                // F4 unescape: the M2 escapes data-plane 0xF1 as F1 00.
++                // Emit the original byte and resume data broadcast.
++                if (outN < outCap) outBuf[outN++] = SYNC;
++                ds = DState::IDLE;
++            }
+             else if (c == SYNC) {
+                 // F1 F1 7E edge: emit the held F1, keep holding the new one.
++                // (Unreachable from escaped data; kept as defensive.)
+                 if (outN < outCap) outBuf[outN++] = SYNC;
+             } else {
+                 // Not a control frame: emit the held F1 + this byte.
