@@ -221,6 +221,22 @@ help
 `drop both 100` makes SuperB report `m2_ok:false`; `none` recovers without
 restarting the sims. Tests: `sim/tests/test_bee_fault.py`.
 
+## CI gate (2026-10-10)
+
+Every push/PR to `main`/`master` runs the host-native sim gate on
+GitHub Actions (`.github/workflows/sim-ci.yml`): build `sim_m2` +
+`sim_superb`, then the full pytest suite. Local equivalent, same gate:
+
+```bash
+./sim/ci.sh
+```
+
+`pytest.ini` at the repo root collects `smoke.py` plus all `test_*.py`
+under `sim/tests/` (`smoke.py` was previously skipped by default test
+naming), so plain `python -m pytest sim/tests/` runs everything.
+A local pre-commit hook (untracked, `.git/hooks/pre-commit`) delegates
+to `sim/ci.sh` for sim-touching commits.
+
 ## Roadmap (deferred)
 
 - **Scripted vehicle depth:** more UDS services (0x14 clear DTC, 0x2E
@@ -229,4 +245,5 @@ restarting the sims. Tests: `sim/tests/test_bee_fault.py`.
 - **Fault injection:** done (broker :14003); deeper protocol-level mutators optional.
 - **J1850 timing sim:** virtual microsecond-accurate GPIO for the PWM/VPW
   driver (still INFERRED vs. silicon, but exercises the bit logic).
-- **CI:** run the smoke + vehicle tests on every commit before hardware flash.
+- **CI:** done (GitHub Actions + `./sim/ci.sh` + local pre-commit hook);
+  deeper gates (firmware hardware-env builds) optional.

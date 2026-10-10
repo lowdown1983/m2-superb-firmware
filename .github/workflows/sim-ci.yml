@@ -1,0 +1,40 @@
+# Host-native sim gate — build sim envs and run the full pytest suite.
+# No hardware, no root ports, no ESP/SAM toolchains beyond PlatformIO native.
+name: sim-ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: sim-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sim:
+    name: build + pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO + pytest
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio pytest
+
+      - name: Build sim_m2 + sim_superb
+        run: pio run -e sim_m2 -e sim_superb
+
+      - name: Run sim pytest suite
+        run: |
+          python -m pytest sim/tests/ -v --tb=short

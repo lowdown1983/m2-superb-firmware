@@ -9,6 +9,28 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Added (2026-10-10 — sim CI gate; Grok-built, independently reviewed)
+- GitHub Actions workflow `.github/workflows/sim-ci.yml`: on push to
+  `main`/`master` and on PRs, installs PlatformIO + pytest on
+  `ubuntu-latest`, builds `sim_m2` + `sim_superb`, runs the full pytest
+  suite (`python -m pytest sim/tests/ -v --tb=short`).
+- Local mirror `sim/ci.sh` — same gate, no cloud: `./sim/ci.sh` from the
+  project root (needs `pio` and `pytest` on PATH).
+- `pytest.ini` at the repo root: collects `smoke.py` alongside
+  `test_*.py` under `sim/tests/` (smoke was previously skipped by
+  default test-file naming); `testpaths = sim/tests`.
+- Docs: `docs/SIM.md` CI-gate section; Roadmap CI bullet closed.
+- Local pre-commit hook (`.git/hooks/pre-commit`, untracked) now
+  delegates to `sim/ci.sh` — one gate definition, used both locally and
+  in CI.
+- Scope: CI/docs only — no `src/m2/`, `src/superb/`, or `src/sim_shim/`
+  changes. Evidence: 22 passed on this VM via the new gate command.
+- Review notes: workflow pins official actions to major versions
+  (`actions/checkout@v4`, `actions/setup-python@v5`); pip packages are
+  unpinned (standard practice, minor reproducibility caveat — CI ran
+  green today). The workflow is inert until the repo is pushed to
+  GitHub; the local gate works now.
+
 ### Added (2026-10-10 — sim Step 3: Bee-link fault injection; Grok-built,
 independently reviewed)
 - `sim/broker.py` gains a fault-control console on `127.0.0.1:14003` (text,
