@@ -264,6 +264,14 @@ void sendRaw(const uint8_t* svc, uint8_t svcLen)
         SerialUSB.println(F("UDS mode is not active. Switch to 'uds' mode first."));
         return;
     }
+    // Policy (2026-10-10, Marcus): raw 0x34/0x36/0x37 refused — flashing
+    // goes only through the confirm+CRC download engine below
+    // ('uds dl' / 'uds ul' / 'uds xferdone').
+    if (buf[0] == 0x34 || buf[0] == 0x36 || buf[0] == 0x37) {
+        SerialUSB.println(F("Refused: 0x34/0x36/0x37 need the download engine —"));
+        SerialUSB.println(F("use 'uds dl <addrHex> <lenHex>', 'uds ul [last]', 'uds xferdone <crc>'."));
+        return;
+    }
     // Phase 9: capability gate first (formalized authority).
     if (!capgate::require(grantFor(buf[0], buf + 1, (uint8_t)(n - 1)), "uds service")) return;
     // Arm-confirm stays as defense-in-depth for 0x11/0x2E.
@@ -319,6 +327,7 @@ void printHelp()
     SerialUSB.println(F("  uds bus 0|1 | uds baud <n> | uds tx <hex> | uds rx <hex> | uds func|phys"));
     SerialUSB.println(F("  uds tp on|off|<ms> | uds session | uds sec | uds discover"));
     SerialUSB.println(F("  uds <svcHex> [dataHex...]   e.g. uds 1003 | uds 22 F190 | uds 19 02 FF"));
+    SerialUSB.println(F("  0x34/0x36/0x37 refused here — use uds dl/ul/xferdone (confirm+CRC engine)."));
     SerialUSB.println(F("  uds didinfo <didHex> | uds ridinfo <ridHex>   (registry lookup)"));
     SerialUSB.println(F("  uds dl <addrHex> <lenHex> [alfidHex]  (0x34, gated+confirm)"));
     SerialUSB.println(F("  uds ul <hex...> [last]  (0x36 blocks; `last` ends the stream)"));
@@ -729,6 +738,10 @@ uint8_t mmTx(const uint8_t* svc, uint8_t svcLen,
     *nResp = 0; *respLen = 0;
     if (!active) return mm::ST_ERR;   // UDS_TX is only valid in UDS mode
     if (svcLen == 0 || svcLen > 12) return mm::ST_BAD_ARG;
+    // Policy (2026-10-10, Marcus): raw 0x34/0x36/0x37 refused on the mm
+    // path too — the web GUI's raw send must not bypass the confirm+CRC
+    // download engine ('uds dl' / 'uds ul' / 'uds xferdone' on console).
+    if (svc[0] == 0x34 || svc[0] == 0x36 || svc[0] == 0x37) return mm::ST_ERR;
     // Phase 9: the capability gate applies to the mm path too — a 0x2E
     // from the web GUI must not behave like a read.
     if (!capgate::require(grantFor(svc[0], svc + 1, (uint8_t)(svcLen - 1)),

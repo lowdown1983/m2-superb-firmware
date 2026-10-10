@@ -1595,6 +1595,10 @@ void handleUdsSend()
     } else if ((svc == 0x11 || svc == 0x2E) && !confirmed) {
         b = "<p class='warn'>0x11 / 0x2E need the confirm checkbox — they can "
             "change vehicle behavior.</p>";
+    } else if (svc == 0x34 || svc == 0x36 || svc == 0x37) {
+        b = "<p class='warn'>0x34 / 0x36 / 0x37 are refused here — flashing "
+            "goes only through the M2 console download engine "
+            "('uds dl' / 'uds ul' / 'uds xferdone').</p>";
     } else {
         String out;
         udsSendRaw(svc, params, (uint8_t)nParams, out);

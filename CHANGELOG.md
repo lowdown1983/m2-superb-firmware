@@ -9,6 +9,23 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Changed (2026-10-10 — raw UDS 0x34/0x36/0x37 policy, Marcus's decision)
+- Raw 0x34/0x36/0x37 (RequestDownload/TransferData/RequestTransferExit)
+  are now refused on both raw paths: the USB console (`uds 34 ...` in
+  `uds::sendRaw`) and the web GUI raw send (`uds::mmTx` via mm-channel).
+  Flashing goes only through the confirm+CRC download engine (`uds dl` /
+  `uds ul` / `uds xferdone`), which keeps its capability-gate +
+  confirm-gate + CRC-verified finalize. The web `/uds_send` page explains
+  the refusal and points at the console engine. Rationale: a mistyped raw
+  0x34 (wrong address/length) could start a destructive write with no
+  second chance; the engine is the single reviewed flashing road.
+  Re-opening the raw path later is a small, deliberate code change.
+  (`src/m2/mode_uds.cpp`, `src/superb/main.cpp`)
+- F-07 log-access policy decided: LEAVE OPEN — SuperB `/logs` and
+  `/log_dl` keep no role check for now, explicitly accepting the
+  trusted-network (WPA2 passphrase) boundary. Rationale: field-operation
+  focus, no added friction while testing; revisit later. No code change.
+
 ### Added (2026-10-10 — sim CI gate; Grok-built, independently reviewed)
 - GitHub Actions workflow `.github/workflows/sim-ci.yml`: on push to
   `main`/`master` and on PRs, installs PlatformIO + pytest on
