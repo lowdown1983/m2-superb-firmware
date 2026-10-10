@@ -190,7 +190,7 @@ owns the J1850 block lazily).
 | Pin-change IRQs | J1850_PWM_RX (51) / J1850_VPW_RX (52), CHANGE | — | Owned between acquire/release; detached on release. |
 | PIOC16 (pin 67) | — | SWCAN INT, FALLING (single callback slot per pack) | Owned between swcan::acquire/release; detached on release. Pin is INPUT (MCP2515 constructor does pinMode INPUT — pack rule satisfied). |
 | SPI0 | — | MCP2515 CS3 (pin 63), sole onboard claimant (INV-SPI0) | No other firmware SPI0 client; expansion-header use must follow the INV-SPI0 rules. |
-| SWC_M0 (64) / SWC_M1 (65) | — | TH8056 MODE0/MODE1 GPIOs | Owned between acquire/release; sleepGpio() is GPIO-only. M0's TC0_CHB0 alt function is never configured while SWCAN owns it. |
+| SWC_M0 (64) / SWC_M1 (65) | — | TH8056 MODE0/MODE1 GPIOs | Owned between acquire/release; release() drives them to sleep (GPIO-only fallback when the MCP2515 was never initialized). M0's TC0_CHB0 alt function is never configured while SWCAN owns it. |
 | Pin 49 rail | SHARED via rail9141 (Phase 7, kept verbatim) | n/a (SWCAN has its own supply) | INV-PWR49: pin 50 settled before pin 49 HIGH; pin 49 LOW only when both J1850 and K-line quiesced. |
 | K-line USART0/1 bit-bang | n/a | n/a | K-line 5-baud init uses GPIO+delay (no TC); no collision with J1850's micros()-based bit-bang — both are CPU-spin, not timer, driven. |
 | txsched | n/a | n/a | millis()-based; no hardware timer. |
@@ -200,8 +200,8 @@ owns the J1850 block lazily).
 | Phase 12 SLCAN | n/a | n/a | CAN0 native only; Bee UART (already owned). No new resources. |
 
 `quiesceBuses()` is unchanged in structure: `m2ret::swcanSleep()` now
-delegates to `swcan::sleepGpio()` (same GPIO-only behavior, safe before
-any MCP2515 init), `j1850::release()` is unchanged (rail9141 integration
+delegates to `swcan::release()` (TH8056 to sleep via GPIO, plus MCP2515 to
+sleep when acquired; GPIO-only fallback when never initialized), `j1850::release()` is unchanged (rail9141 integration
 kept verbatim). `m2ret::swcanEnter/Exit/SetSpeed` now delegate to
 `swcan::acquire/release/reconfigure`.
 
