@@ -4,11 +4,13 @@
 // CAN_FRAME / BytesUnion are copied VERBATIM from collin80/can_common
 // (can_common.h, the same dependency the real [env:m2] build uses), so the
 // field layout the firmware touches (.id/.extended/.length/.rtr and
-// .data.bytes[]) is identical. The controller itself is a virtual loopback
-// bus: sendFrame() makes the frame available() to read() on the SAME object.
-// That is NOT a real two-node CAN bus (INFERRED); cross-traffic injection
-// comes from the test console, and the deferred vehicle-behavior sim will
-// replace the loopback with a scripted bus model.
+// .data.bytes[]) is identical.
+//
+// Bus model (2026-10-10 Step 2):
+//   - CAN0↔CAN1 cross-bridged on sendFrame (HARNESS physical loopback wire).
+//   - Same-controller TX is NOT echoed to own RX (avoids ISO-TP self-poison).
+//   - vehicle_ecu::onTx() may injectFrame() scripted ECU responses.
+// That is NOT a real multi-node vehicle bus (INFERRED timing/electrical).
 
 #include <Arduino.h>
 
@@ -94,9 +96,16 @@ public:
 };
 // ---- end verbatim ----
 
-// Virtual CAN controller (loopback). Only the methods the firmware calls
-// are implemented; the rest of the due_can API is intentionally absent.
-// Named CANRaw to match the real due_can class the firmware references.
+// Virtual CAN controller. Named CANRaw to match real due_can.
+//
+// Bus model (Step 2, 2026-10-10):
+//   - CAN0↔CAN1 are cross-bridged on sendFrame (simulates a physical
+//     loopback wire for HARNESS selfcheck). Same-controller TX is NOT
+//     echoed onto that controller's RX (echo would poison ISO-TP RX with
+//     the tester's own request).
+//   - vehicle_ecu::onTx() may injectFrame() a scripted ECU response onto
+//     the transmitting controller (real-car topology: request and reply
+//     share the same CAN interface).
 class CANRaw {
 public:
     CANRaw() : begun_(false), baud_(0), listenOnly_(false) {}
@@ -123,14 +132,8 @@ public:
         return 1;
     }
 
-    // Loopback: the frame becomes readable on THIS controller.
-    // (A real bus would deliver it to the OTHER node; see header note.)
-    bool sendFrame(CAN_FRAME& frame) {
-        if (!begun_) return false;
-        frame.timestamp = millis();
-        rxq_.push_back(frame);
-        return true;
-    }
+    // Implemented out-of-line in SimCAN_globals.cpp (needs Can0/Can1 + ECU).
+    bool sendFrame(CAN_FRAME& frame);
 
     void enable_autobaud_listen_mode() { listenOnly_ = true; }
     void disable_autobaud_listen_mode() { listenOnly_ = false; }
@@ -139,8 +142,9 @@ public:
     void setListenOnlyMode(bool en) { listenOnly_ = en; }
 
     // Test hook: inject a frame as if it arrived from the vehicle.
-    // (Deferred: scripted vehicle-behavior sim will drive this.)
     void injectFrame(const CAN_FRAME& f) { rxq_.push_back(f); }
+
+    bool begun() const { return begun_; }
 
 private:
     bool begun_;

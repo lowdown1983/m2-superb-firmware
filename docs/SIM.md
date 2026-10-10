@@ -164,13 +164,40 @@ Notes:
   terminal or the distrobox described in SETUP.md §1.
 - First build downloads the `native` platform (~tens of MB) — needs network.
 
+## Scripted vehicle ECU (Step 2 — 2026-10-10)
+
+`src/sim_shim/vehicle_ecu.*` answers OBD and UDS on CAN0/CAN1 via
+`injectFrame()`:
+
+**OBD Mode 01** (ELM path): PIDs 00/05/0B/0C/0D/0F/11/1C/2F — static
+INFERRED values (RPM 3000, speed 80 km/h, …).
+
+**UDS** (console `uds …` path):
+- 0x10 DiagnosticSessionControl (01/02/03)
+- 0x22 ReadDataByIdentifier (F186 session, F187/F188/F18A/F197 part no,
+  F190 VIN multi-frame)
+- 0x3E TesterPresent
+- 0x19 ReadDTCInformation (02 → empty list)
+- 0x27 SecurityAccess (seed stub / key reject)
+- other SIDs → NRC 0x11
+
+Bus model: same-controller TX is not echoed to own RX (ISO-TP safe).
+CAN0↔CAN1 are cross-bridged for HARNESS selfcheck.
+
+Tests:
+```bash
+pio run -e sim_m2 -e sim_superb
+python3 -m pytest sim/tests/smoke.py \
+  sim/tests/test_vehicle_elm.py sim/tests/test_vehicle_uds.py -v
+```
+
 ## Roadmap (deferred)
 
-- **Scripted vehicle behavior:** replace the CAN loopbacks with a scripted
-  bus model (virtual ECUs answering OBD2/UDS, periodic broadcast frames)
-  driven through `CANRaw::injectFrame()` — the hook already exists.
+- **Scripted vehicle depth:** more UDS services (0x14 clear DTC, 0x2E
+  write), Mode 09 OBD multi-frame, periodic broadcast frames,
+  python-driven scenario scripts.
 - **Fault injection:** drop/corrupt Bee bytes via the broker to test the
   control channel's resync and timeout paths.
 - **J1850 timing sim:** virtual microsecond-accurate GPIO for the PWM/VPW
   driver (still INFERRED vs. silicon, but exercises the bit logic).
-- **CI:** run the smoke test on every commit before hardware flash.
+- **CI:** run the smoke + vehicle tests on every commit before hardware flash.

@@ -62,6 +62,31 @@ fixes, applied on Marcus's approval)
   `ATTRIBUTION.md`, and vendored `bolt17.json`/`bolt19.json` PID data
   from iternio/ev-obd-pids (Apache 2.0).
 
+### Added (2026-10-10 — sim Step 2: scripted vehicle ECU, ELM + UDS;
+Grok-built, independently reviewed)
+- Host-native scripted vehicle ECU under `src/sim_shim/` only — no
+  `src/m2/` or `src/superb/` changes; production firmwares still compile
+  unmodified against the shims.
+- `vehicle_ecu.*`: OBD Mode 01 PID responses (00/05/0B/0C/0D/0F/11/1C/2F)
+  and UDS services 0x10 / 0x22 / 0x3E / 0x19 / 0x27 (plus NRC 0x11
+  default). Multi-frame ISO-TP for DID 0xF190 (VIN). Payload **values**
+  are **INFERRED** static constants; request/response **paths** are
+  **VERIFIED** in sim via pytest.
+- Bus model change (`due_can.h`, `SimCAN_globals.cpp`): same-controller
+  TX→RX loopback removed (it poisoned ISO-TP RX with the tester's own
+  request); CAN0↔CAN1 cross-bridged on `sendFrame` (models the HARNESS
+  loopback wire); `vehicle_ecu::onTx()` called on every `sendFrame`.
+- Tests: `sim/tests/test_vehicle_elm.py` (3 cases),
+  `sim/tests/test_vehicle_uds.py` (5 cases) — full suite with smoke:
+  13 passed. Docs: `docs/SIM.md` Step 2 section.
+- Review notes: 0x27 seed (`DEADBEEF`) lives sim-side only — the M2
+  firmware's 0x27 stub policy is unchanged. The 0100 support mask
+  over-claims a few PIDs (04/09/10/20) the ECU doesn't implement
+  (request → no response, honest `NO DATA`); mask should be tightened
+  when the ECU grows. Multi-frame continuation ignores FC block-size /
+  STmin (blasts all CFs at once) — acceptable for a scripted ECU,
+  documented in the header.
+
 ### Fixed (2026-10-09 — ChatGPT audit Section 03, applied on Marcus's approval)
 - F-03-01 (HIGH): the UDS/PROG transfer engine now enforces the declared
   image length end to end — `xfer::State.declaredLen`, `open()` takes the
