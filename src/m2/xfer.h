@@ -24,6 +24,9 @@ struct State {
     uint16_t expectedSeq = 0;
     uint8_t blockSeq = 1;        // ISO 14229-1: starts at 1, wraps 0xFF->0x00
     uint32_t bytesRx = 0;
+    uint32_t declaredLen = 0;    // F-03-01: image length from the 0x34
+                                 // request; finish() requires bytesRx ==
+                                 // declaredLen (0 = rejected at open).
     uint16_t chunksRx = 0;
     uint32_t txCrc32 = 0xFFFFFFFFUL;  // IEEE CRC32 over flashed bytes
     uint32_t maxBlockLen = 0;    // from 0x34 response (0 = ECU didn't say)
@@ -50,9 +53,12 @@ struct Io {
 
 void reset(State& s);
 
-// Call after a positive 0x34 (RequestDownload). maxBlockLen from the
-// 0x74 response (0 when the ECU didn't report one).
-void open(State& s, uint32_t maxBlockLen, uint32_t nowMs);
+// Call after a positive 0x34 (RequestDownload). declaredLen is the image
+// length sent in the 0x34 request (F-03-01: the engine enforces it —
+// chunks past it are rejected, finish() requires bytesRx == declaredLen).
+// maxBlockLen from the 0x74 response (0 when the ECU didn't report one).
+// Returns false (leaves the engine closed) on a zero declared length.
+bool open(State& s, uint32_t declaredLen, uint32_t maxBlockLen, uint32_t nowMs);
 
 // One download chunk -> one 0x36 TransferData, immediately (streaming,
 // no image buffering). Returns 0=OK, 1=BAD_ARG, 2=ERR.

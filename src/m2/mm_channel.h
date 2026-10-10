@@ -250,8 +250,11 @@ struct Ops {
     // Phase 3: UDS + OBD2 supervision (nullptr-safe: dispatch checks).
     // udsTx: ST_OK + first response in resp/*respLen, count in *nResp;
     //   ST_ERR when UDS mode is not active; ST_BAD_ARG on bad args.
+    //   F-03-03: respCap bounds the copy (ISO-TP maxPayload can exceed
+    //   the caller's buffer; the old contract had no capacity).
     uint8_t (*udsTx)(const uint8_t* svc, uint8_t svcLen,
-                     uint8_t* resp, uint8_t* respLen, uint8_t* nResp);
+                     uint8_t* resp, uint8_t respCap,
+                     uint8_t* respLen, uint8_t* nResp);
     uint8_t (*udsCfg)(uint8_t bus, uint32_t baud, uint32_t txId, uint32_t rxId,
                       uint8_t func, uint16_t tpMs);
     void (*udsStatus)(uint8_t& session, uint8_t& bus, uint32_t& baud,

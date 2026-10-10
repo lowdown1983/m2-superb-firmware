@@ -370,7 +370,11 @@ bool doDownload(uint32_t addr, uint32_t len, uint8_t alfid)
     } else SerialUSB.print(F("(not reported)"));
     SerialUSB.println();
     // Phase 9: open the shared download engine.
-    xfer::open(dl, maxBlock, millis());
+    // F-03-01: the 0x34-declared length is now the engine's invariant.
+    if (!xfer::open(dl, len, maxBlock, millis())) {
+        SerialUSB.println(F("Download rejected: zero declared length."));
+        return false;
+    }
     state = ST_DOWNLOADING;
     SerialUSB.println(F("Send image chunks now (web /prog upload, or mm channel)."));
     return true;

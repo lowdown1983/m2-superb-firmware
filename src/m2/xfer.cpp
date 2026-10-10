@@ -30,12 +30,15 @@ void noteFmt(Io& io, const char* a, uint32_t v, const char* b)
 
 void reset(State& s) { s = State(); }
 
-void open(State& s, uint32_t maxBlockLen, uint32_t nowMs)
+bool open(State& s, uint32_t declaredLen, uint32_t maxBlockLen, uint32_t nowMs)
 {
     reset(s);
+    if (declaredLen == 0) return false;  // F-03-01: no zero-length downloads
     s.open = true;
+    s.declaredLen = declaredLen;
     s.maxBlockLen = maxBlockLen;
     s.lastChunkAt = nowMs;
+    return true;
 }
 
 uint8_t feedChunk(State& s, Io& io, uint16_t seq, uint8_t flags,
@@ -63,6 +66,11 @@ uint8_t feedChunk(State& s, Io& io, uint16_t seq, uint8_t flags,
     // on ECU rejection; fail-closed instead.
     if (s.maxBlockLen > 0 && (uint32_t)len + 2 > s.maxBlockLen) {
         abort(s, io, "chunk exceeds ECU max block length");
+        return 1;
+    }
+    // F-03-01: never accept more bytes than the 0x34-declared image length.
+    if (s.bytesRx + len > s.declaredLen) {
+        abort(s, io, "chunk exceeds declared download length");
         return 1;
     }
     if (len == 0) {
@@ -106,6 +114,12 @@ bool finish(State& s, Io& io, uint32_t fileCrc32)
 {
     if (!s.open || !s.streamDone) {
         if (io.note) io.note(io.ctx, "no complete stream to finalize");
+        return false;
+    }
+    // F-03-01: the transferred byte count must equal the 0x34-declared
+    // length — a short stream with a matching CRC must not finalize.
+    if (s.bytesRx != s.declaredLen) {
+        abort(s, io, "byte count != declared download length — NOT finalized");
         return false;
     }
     uint32_t finalCrc = s.txCrc32 ^ 0xFFFFFFFFUL;

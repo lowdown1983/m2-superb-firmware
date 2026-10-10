@@ -399,7 +399,11 @@ void udsDownload(uint32_t addr, uint32_t len, uint8_t alfid)
         for (uint8_t i = 0; i < mbLen && 2 + i < t.r[0].len; i++)
             maxBlock = (maxBlock << 8) | t.r[0].data[2 + i];
     }
-    xfer::open(dl, maxBlock, millis());
+    // F-03-01: the 0x34-declared length is now the engine's invariant.
+    if (!xfer::open(dl, len, maxBlock, millis())) {
+        SerialUSB.println(F("Download rejected: zero declared length."));
+        return;
+    }
     SerialUSB.print(F("Download open. ECU max block: "));
     SerialUSB.println(maxBlock ? String(maxBlock) : F("(unknown)"));
     SerialUSB.println(F("Send blocks with `uds ul <hex...> [last]`;"));
@@ -719,7 +723,8 @@ void console(char* line)
 }
 
 uint8_t mmTx(const uint8_t* svc, uint8_t svcLen,
-             uint8_t* resp, uint8_t* respLen, uint8_t* nResp)
+             uint8_t* resp, uint8_t respCap,
+             uint8_t* respLen, uint8_t* nResp)
 {
     *nResp = 0; *respLen = 0;
     if (!active) return mm::ST_ERR;   // UDS_TX is only valid in UDS mode
@@ -732,7 +737,10 @@ uint8_t mmTx(const uint8_t* svc, uint8_t svcLen,
     TxResult t = transact(svc, svcLen);
     *nResp = t.nResp;
     if (t.nResp > 0) {
+        // F-03-03: clamp to the caller's capacity — t.r[0].len follows the
+        // configurable ISO-TP maxPayload (up to 256) and can exceed resp.
         uint8_t n = t.r[0].len;
+        if (n > respCap) n = respCap;
         for (uint8_t i = 0; i < n; i++) resp[i] = t.r[0].data[i];
         *respLen = n;
     }

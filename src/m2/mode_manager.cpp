@@ -140,9 +140,10 @@ static uint8_t mmSetFeatureCb(uint8_t feat, uint8_t enable)
 
 // ---- Phase 3: UDS + OBD2 supervision ops ----
 static uint8_t mmUdsTxCb(const uint8_t* svc, uint8_t svcLen,
-                         uint8_t* resp, uint8_t* respLen, uint8_t* nResp)
+                         uint8_t* resp, uint8_t respCap,
+                         uint8_t* respLen, uint8_t* nResp)
 {
-    return uds::mmTx(svc, svcLen, resp, respLen, nResp);
+    return uds::mmTx(svc, svcLen, resp, respCap, respLen, nResp);
 }
 static uint8_t mmUdsCfgCb(uint8_t bus, uint32_t baud, uint32_t txId, uint32_t rxId,
                           uint8_t func, uint16_t tpMs)

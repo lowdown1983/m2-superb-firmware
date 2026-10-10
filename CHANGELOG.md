@@ -9,6 +9,29 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Fixed (2026-10-09 — ChatGPT audit Section 03, applied on Marcus's approval)
+- F-03-01 (HIGH): the UDS/PROG transfer engine now enforces the declared
+  image length end to end — `xfer::State.declaredLen`, `open()` takes the
+  length and rejects zero, `feedChunk()` rejects overrun chunks mid-stream,
+  `finish()` requires `bytesRx == declaredLen`; both 0x34 callers updated.
+- F-03-02 (HIGH): the SuperB web UDS sender (`udsSendRaw()`) transmitted
+  `1+nParams` bytes for a `2+nParams` buffer, so the M2 rejected every
+  request and the whole web UDS path was dead; corrected to `2+nParams`.
+- F-03-03 (HIGH): `uds::mmTx` copied an unbounded ISO-TP response into
+  `rdata[64]` (stack overwrite when the ISO-TP cap exceeded 64). `respCap`
+  is now carried through the `udsTx` op signature (`mm_channel.h/.cpp`,
+  `mode_manager.cpp`, `mode_uds.h/.cpp`) with a clamp before the copy —
+  same pattern as the `mmcTransact` `outCap` fix.
+- New invariants proven with an 8-case host harness against the real
+  `xfer.cpp`: zero-open rejected, overrun → abort, short finish refused,
+  exact-length stream + valid CRC accepted. All envs build clean, zero new
+  warnings.
+- Open decision (unchanged): the raw console path can send UDS programming
+  services `0x34/0x36/0x37` directly with `ALLOW_FLASH_PROGRAMMING`,
+  bypassing the managed transfer engine. Recommendation is to refuse and
+  force the managed path (fail-closed); a legitimate power-user case for
+  keeping raw access was noted. Marcus's call — not decided.
+
 ## [2026-10-09] — Post-roadmap audit triage (ChatGPT audits)
 
 ChatGPT's firmware audit reports (in `~/workspace/user/files/`) triaged

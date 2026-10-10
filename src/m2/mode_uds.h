@@ -52,9 +52,11 @@ void console(char* line);
 // mm-channel ops (manager delegates; see mm_channel.h).
 // mmTx sends one raw service using the current addressing config. Returns
 // an mm ST_* code; *nResp = responses collected, first response bytes in
-// resp/*respLen (truncated by the caller contract, not here).
+// resp/*respLen, clamped to respCap (F-03-03: the ISO-TP response can be
+// larger than the caller's buffer when maxPayload is raised).
 uint8_t mmTx(const uint8_t* svc, uint8_t svcLen,
-             uint8_t* resp, uint8_t* respLen, uint8_t* nResp);
+             uint8_t* resp, uint8_t respCap,
+             uint8_t* respLen, uint8_t* nResp);
 // mmCfg stages addressing/bus config (applied on next bus acquire; if the
 // bus is already up and bus/baud changed, it is dropped and re-acquired
 // lazily). tpMs: 0 = tester-present off, else keepalive interval.

@@ -118,7 +118,9 @@ void dispatch()
                 return;
             }
             uint8_t rdata[64]; uint8_t rlen = 0; uint8_t nResp = 0;
-            rep[1] = ops->udsTx(rxBuf + 2, rxBuf[1], rdata, &rlen, &nResp);
+            // F-03-03: carry the destination capacity (mmcTransact outCap
+            // pattern) — uds::mmTx clamps the ISO-TP response to it.
+            rep[1] = ops->udsTx(rxBuf + 2, rxBuf[1], rdata, sizeof(rdata), &rlen, &nResp);
             rep[2] = nResp;
             // Truncate the first response to fit MAX_PAYLOAD (documented).
             uint8_t room = (uint8_t)(MAX_PAYLOAD - 4);

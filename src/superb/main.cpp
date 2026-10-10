@@ -1472,7 +1472,10 @@ bool udsSendRaw(uint8_t svc, const uint8_t* params, uint8_t nParams, String& out
     req[1] = svc;
     for (uint8_t i = 0; i < nParams; i++) req[2 + i] = params[i];
     uint8_t resp[64]; uint8_t rlen = 0;
-    bool ok = mmcTransact(mmc::CMD_UDS_TX, req, (uint8_t)(1 + nParams), resp, sizeof(resp), rlen);
+    // F-03-02: the frame is [svcLen][svc][params...] = 2 + nParams bytes.
+    // The old (1 + nParams) omitted the svcLen byte itself, so the M2
+    // rejected every request (rxLen < 3, or svcLen > rxLen - 2).
+    bool ok = mmcTransact(mmc::CMD_UDS_TX, req, (uint8_t)(2 + nParams), resp, sizeof(resp), rlen);
     if (!ok) { out = "<span class='warn'>M2 did not answer.</span>"; return false; }
     if (rlen < 2 || resp[1] != mmc::ST_OK) {
         out = "<span class='warn'>Rejected: switch the M2 to UDS mode first.</span>";
