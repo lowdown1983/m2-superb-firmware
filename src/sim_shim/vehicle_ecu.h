@@ -5,16 +5,15 @@
 // via injectFrame(). Multi-frame responses (e.g. VIN DID 0xF190) use FF +
 // CF after the tester's Flow Control.
 //
-// UDS coverage (INFERRED static data):
-//   0x10 DiagnosticSessionControl (01/02/03)
-//   0x22 ReadDataByIdentifier (F186, F187/F188/F18A/F197, F190 VIN)
-//   0x3E TesterPresent
-//   0x19 ReadDTCInformation (02 → empty list)
-//   0x27 SecurityAccess (seed stub / key reject)
-//   other SIDs → NRC 0x11
+// Runtime knobs (sim console, intercepted in SerialUSB stdio path — no
+// src/m2 changes):
+//   vehicle set  rpm|speed|coolant|throttle <value>
+//   vehicle ramp rpm|speed|coolant|throttle <from> <to> <steps>
+//   vehicle show
+// Ramp advances one step each time that signal is read (OBD PID request).
+// Purpose: encoding-boundary sweeps, not a car model.
 //
-// Evidence: INFERRED vehicle values. Proves firmware request/response paths
-// in sim; does NOT prove silicon timing or a real ECU.
+// Evidence: INFERRED vehicle values. Paths VERIFIED in sim pytest.
 
 #include "due_can.h"
 
@@ -23,5 +22,12 @@ namespace vehicle_ecu {
 void onTx(CANRaw* bus, const CAN_FRAME& tx);
 void setEnabled(bool on);
 bool enabled();
+
+// Console intercept. Returns true if `line` was a vehicle command (caller
+// must NOT feed it to the firmware). Writes a human reply via `reply`
+// (may be called zero or more times; each string is one line without '\n').
+bool handleConsoleLine(const char* line,
+                       void (*reply)(const char* msg, void* ctx),
+                       void* ctx);
 
 }  // namespace vehicle_ecu

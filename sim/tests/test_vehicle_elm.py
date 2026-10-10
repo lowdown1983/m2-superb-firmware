@@ -180,8 +180,8 @@ def test_g_elm_pid_0100_supported(sims):
     buf = _bt_session(b"0100\r", timeout=15)
     assert b"41" in buf and b"00" in buf, \
         "no 0100 response (got %r)" % buf[-300:]
-    # bitfield bytes from vehicle_ecu: 98 3B 80 11
-    assert b"98" in buf, "missing support bitfield (got %r)" % buf[-300:]
+    # bitfield: 08 3A 80 00 (only implemented PIDs)
+    assert b"08" in buf and b"3A" in buf, "missing support bitfield (got %r)" % buf[-300:]
     print("PASS: 0100 -> support bitfield from vehicle_ecu")
 
 

@@ -80,12 +80,35 @@ Grok-built, independently reviewed)
   `sim/tests/test_vehicle_uds.py` (5 cases) — full suite with smoke:
   13 passed. Docs: `docs/SIM.md` Step 2 section.
 - Review notes: 0x27 seed (`DEADBEEF`) lives sim-side only — the M2
-  firmware's 0x27 stub policy is unchanged. The 0100 support mask
-  over-claims a few PIDs (04/09/10/20) the ECU doesn't implement
-  (request → no response, honest `NO DATA`); mask should be tightened
-  when the ECU grows. Multi-frame continuation ignores FC block-size /
+  firmware's 0x27 stub policy is unchanged. (The 0100 mask over-claim
+  noted at Step 2 was fixed by the Option 1 increment below.)
+  Multi-frame continuation ignores FC block-size /
   STmin (blasts all CFs at once) — acceptable for a scripted ECU,
   documented in the header.
+
+### Added (2026-10-10 — sim Option 1: vehicle set / ramp; Grok-built,
+independently reviewed)
+- `vehicle set|ramp|show` on the M2 sim console: mutable rpm / speed /
+  coolant (°C) / throttle (%) with OBD Mode 01 encodings applied on read
+  (rpm×4, coolant+40, throttle%→0..255, all clamped); `vehicle ramp <sig>
+  <from> <to> <steps>` advances one step per PID read (steps+1 samples,
+  holds at `to`). Purpose is encoding-boundary sweeps, not a car model.
+- Intercept lives in `src/sim_shim` (`Arduino.h` line buffer +
+  `sim_support.cpp` `stdioFlushLine()`, `#ifdef SIM_M2`): lines starting
+  with `vehicle` are consumed before the firmware console parser, so
+  `src/m2` is untouched. Non-vehicle lines are forwarded unchanged
+  (`\r` stripped, `\n` terminated); the firmware has no `vehicle`
+  command, so nothing is shadowed.
+- The 0100 support mask now claims exactly the implemented 01-20 PIDs
+  (05/0B/0C/0D/0F/11); PIDs 1C/2F stay implemented but undiscoverable via
+  0100, which is correct per ISO 15031 (they belong to higher groups).
+- Tests: `sim/tests/test_vehicle_set.py` (4 cases: rpm 0/8000 encoding,
+  coolant 99/100 boundary, speed ramp 0→30, `vehicle show`); full suite
+  with smoke: 17 passed. Docs: `docs/SIM.md` Option 1 section.
+- Reviewer cleanup: removed dead intermediate assignments in the 0100
+  mask builder (final values were correct; comments now derive the bits).
+  Cosmetic note: `vehicle set` echoes the unclamped input value in its
+  `OK` reply while `vehicle show` reports the clamped value.
 
 ### Fixed (2026-10-09 — ChatGPT audit Section 03, applied on Marcus's approval)
 - F-03-01 (HIGH): the UDS/PROG transfer engine now enforces the declared

@@ -191,6 +191,19 @@ python3 -m pytest sim/tests/smoke.py \
   sim/tests/test_vehicle_elm.py sim/tests/test_vehicle_uds.py -v
 ```
 
+## Vehicle set / ramp (Option 1 — 2026-10-10)
+
+Sim console (M2 SerialUSB) commands intercepted before firmware:
+
+```
+vehicle set  rpm|speed|coolant|throttle <value>
+vehicle ramp rpm|speed|coolant|throttle <from> <to> <steps>
+vehicle show
+```
+
+Ramp advances one step each time that OBD PID is read. Encoding:
+rpm×4, coolant+40, throttle%→0..255. `src/sim_shim` only.
+
 ## Roadmap (deferred)
 
 - **Scripted vehicle depth:** more UDS services (0x14 clear DTC, 0x2E

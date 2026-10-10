@@ -2,6 +2,9 @@
 // Linux-only (INFERRED stand-ins for SAM3X/ESP32 hardware).
 
 #include <Arduino.h>
+#ifdef SIM_M2
+#include "vehicle_ecu.h"
+#endif
 #include <SPI.h>  // sim shim: SPIClass SPI instance below
 
 #include <unistd.h>
@@ -98,15 +101,51 @@ void HardwareSerial::tcpPump() {
     }
 }
 
+void HardwareSerial::stdioFlushLine() {
+    lineBuf_[lineLen_] = '\0';
+    // Strip trailing CR if present (already excluded LF).
+    while (lineLen_ > 0 && (lineBuf_[lineLen_ - 1] == '\r')) {
+        lineBuf_[--lineLen_] = '\0';
+    }
+#ifdef SIM_M2
+    auto reply = [](const char* msg, void* ctx) {
+        auto* self = static_cast<HardwareSerial*>(ctx);
+        self->write((const uint8_t*)msg, strlen(msg));
+        self->write((uint8_t)'\n');
+    };
+    if (vehicle_ecu::handleConsoleLine(lineBuf_, reply, this)) {
+        lineLen_ = 0;
+        return;  // consumed — firmware never sees it
+    }
+#endif
+    // Forward the full line + newline to the firmware console parser.
+    for (size_t i = 0; i < lineLen_; i++) rx_.push_back((uint8_t)lineBuf_[i]);
+    rx_.push_back('\n');
+    lineLen_ = 0;
+}
+
 void HardwareSerial::stdioPump() {
     if (eof_) return;
     uint8_t tmp[256];
     for (;;) {
         ssize_t n = ::read(STDIN_FILENO, tmp, sizeof(tmp));
         if (n > 0) {
-            for (ssize_t i = 0; i < n; i++) rx_.push_back(tmp[i]);
+            for (ssize_t i = 0; i < n; i++) {
+                uint8_t b = tmp[i];
+                if (b == '\n') {
+                    stdioFlushLine();
+                } else if (b == '\r') {
+                    // ignore; flush on \n
+                } else if (lineLen_ + 1 < sizeof(lineBuf_)) {
+                    lineBuf_[lineLen_++] = (char)b;
+                } else {
+                    // overflow — drop line
+                    lineLen_ = 0;
+                }
+            }
         } else if (n == 0) {
-            eof_ = true;  // stdin closed
+            if (lineLen_ > 0) stdioFlushLine();
+            eof_ = true;
             break;
         } else {
             break;  // EAGAIN

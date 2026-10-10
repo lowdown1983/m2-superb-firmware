@@ -179,7 +179,8 @@ public:
 class HardwareSerial : public Print {
 public:
     enum Role { TCP_ROLE, STDIO_ROLE };
-    explicit HardwareSerial(Role r) : role_(r), fd_(-1), eof_(false) {}
+    explicit HardwareSerial(Role r) : role_(r), fd_(-1), eof_(false),
+                                        lineLen_(0) {}
 
     void begin(unsigned long baud);
     void end();
@@ -195,8 +196,13 @@ private:
     int fd_;                          // TCP_ROLE: socket
     bool eof_;
     std::deque<uint8_t> rx_;
+    // STDIO_ROLE line assembly so sim can intercept `vehicle ...` without
+    // feeding those lines into the firmware console parser (src/m2 untouched).
+    char lineBuf_[160];
+    size_t lineLen_;
     void tcpPump();                   // non-blocking recv into rx_
     void stdioPump();                 // non-blocking stdin into rx_
+    void stdioFlushLine();            // handle or forward one assembled line
     static int beePort();             // 14001 (M2) / 14002 (SuperB)
 };
 
