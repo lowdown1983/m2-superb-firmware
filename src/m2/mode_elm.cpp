@@ -201,7 +201,10 @@ void printDataLine(const uint8_t* hdr, uint8_t hdrLen,
 
 void reply(const char* s)  // single-line text reply + prompt
 {
+    // Genuine ELM327 framing (2026-10-10): text replies terminate \r\r>
+    // (was \r> — a strict-parser deviation found by differential probe).
     Serial.print(s);
+    Serial.write('\r');
     prompt();
 }
 
@@ -214,11 +217,13 @@ void obdCan(const PDesc* pd, const uint8_t* reqBytes, uint8_t reqLen)
                                : (pd->ext ? 0x18DB33F1UL : 0x7DF);
     isotp::Endpoint ep{ &Can0, txId, 0, pd->ext };
     dbg::hexBytes(F("ELM TX"), txId, reqBytes, reqLen);
-    isotp::Response resps[4];
+    isotp::Response resps[8];  // 2026-10-10: was [4]; the Bolt EV has 5
+    // ECUs answering functional requests — the 5th response was dropped,
+    // hiding its PIDs from app sensor scans.
     // 2026-10-08: quietMs 200->25. The 200ms multi-ECU listen window capped
     // throughput at ~5 PIDs/sec; 25ms still collects staggered ECU replies
     // but doesn't idle on single-ECU vehicles (Bolt EV: 6.9 -> ~30/sec).
-    uint8_t n = isotp::requestMulti(ep, reqBytes, reqLen, resps, 4,
+    uint8_t n = isotp::requestMulti(ep, reqBytes, reqLen, resps, 8,
                                     obdTimeoutMs(), 25);
     if (n == 0) { dbg::println(F("ELM: NO DATA (no ECU response)")); reply("NO DATA"); return; }
     for (uint8_t i = 0; i < n; i++) {
@@ -346,7 +351,7 @@ void atCommand(const char* c)  // c = text after "AT", already uppercased
     if (c[0] == 'Z' && c[1] == '\0') {           // ATZ: reset
         busRelease();
         begin();                                 // power-on defaults
-        Serial.print(F("\rELM327 v1.5"));
+        Serial.print(F("\rELM327 v1.5\r"));      // genuine \r\r> framing
         prompt();
         return;
     }
@@ -393,8 +398,11 @@ void atCommand(const char* c)  // c = text after "AT", already uppercased
         return;
     }
     if (!strncmp(c, "DPN", 3) && c[3] == '\0') {  // ATDPN
-        char s[2] = { (char)(protoNum < 10 ? '0' + protoNum : 'A' + protoNum - 10), '\0' };
-        if (protoAuto && activeProto != 0) {
+        // Genuine: "A0" when protocol is AUTO and nothing connected yet
+        // (2026-10-10: was "0", a deviation that can confuse app init).
+        char s[3] = { (char)(protoNum < 10 ? '0' + protoNum : 'A' + protoNum - 10), '\0', '\0' };
+        if (protoAuto && activeProto == 0) { s[0] = 'A'; s[1] = '0'; }
+        else if (protoAuto && activeProto != 0) {
             uint8_t a = activeProto;
             s[0] = (char)(a < 10 ? '0' + a : 'A' + a - 10);
         }

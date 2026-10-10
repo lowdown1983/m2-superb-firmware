@@ -30,15 +30,34 @@ long sessions. Never drive with MITM bridging or gateway MODIFY rules active.
 
 ## 2. Diagnostic addressing (11-bit, 500k HS bus)
 
-| Req | Resp | Module | What's there |
+**VEHICLE-VALIDATED 2026-10-10** — Car Scanner ECU scan of the test car
+(VIN 1G1FX6S00P4175849, 2023 MY). Five responders:
+
+| Req | Resp | Module (car's name) | What's there |
 |---|---|---|---|
-| 0x7E0 | 0x7E8 | ECM / powertrain | Standard OBD2 (already working via Torque) |
-| 0x7E2 | 0x7EA | Drive unit | Trans temp PID 0x1940 (Grade B) |
-| 0x7E4 | 0x7EC | **BECM (battery)** | All high-voltage PIDs below |
-| 0x7E7 | 0x7EF | Battery sections/cells | 96 cell voltages, section temps |
+| 0x7E0 | 0x7E8 | ECM-EngineControl | Standard OBD2 (already working via Torque) |
+| 0x7E1 | 0x7E9 | HPC1-HybridPtCtrl1 | Hybrid powertrain control 1 |
+| 0x7E4 | 0x7EC | HPC2-HybridPtCtrl | **High-voltage PIDs live here** (SOC 228334, capacity, charging, temps) |
+| 0x7E6 | 0x7EE | BSC2-BrakeSyste | Brake system control |
+| 0x7E7 | 0x7EF | BECM-B+EnergyCtrl | 96 cell voltages, section temps |
+
+Corrections vs the community sources: 0x7E4 is **HPC2**, not "BECM" — the
+battery PIDs are served by HPC2 on this car; the module literally named BECM
+is at 0x7E7. (Addresses match OVMS; only the names were wrong.)
+
+**Not answering:** 0x7E2 (no 0x7EA responder) — the OVMS trans-temp PID
+0x1940 is likely dead on this car. Grade: VEHICLE-VALIDATED (this car).
 
 Functional broadcast: 0x7DF. All extended diagnostics are service 0x22
 (read DID) with the 4-hex-digit PID = last 4 of the `22xxxx` code.
+
+**Discovery-engine expectation:** auto-detect + discovery should find exactly
+these 5 responders (7E8/7E9/7EC/7EE/7EF). Anything else answering is
+unexpected — record it.
+
+Other modules seen via Mode 09 (not UDS responders): Transmission control
+unit #1 (supplier LGE), BCM, EPS/TDM (column EPS), ABS/EBCM/ESC (Bosch GEN09),
+Continuous Damping Control, instrument cluster. Build date ~2023-07-21.
 
 ## 3. Extended PIDs that matter (all Grade C unless noted)
 
@@ -140,8 +159,11 @@ responders. Log a short session to SPIFFS and download as CSV.
 
 ## 7. Open questions to answer with the car
 
-1. Which capacity PID answers on the 2023: 2245F9 or 2241A3?
-2. Do the Volt-era 7E1 PIDs (222414/222885) answer, or are they dead?
-3. Which of the 96 cell PIDs (224181–224240 on 7E7) actually respond?
+1. Which capacity PID answers on the 2023: 2245F9 or 2241A3? (Ask HPC2 at 0x7E4.)
+2. Do the Volt-era 7E1 PIDs (222414/222885) answer, or are they dead? (0x7E1 =
+   HPC1 on this car — plausible but unconfirmed.)
+3. Which of the 96 cell PIDs (224181–224240 on **0x7E7/BECM**) actually respond?
 4. Does the SWCAN stage of auto-detect find the 33.33k bus on pin 1?
-5. Any UDS DIDs beyond the OVMS set (try 0x22 on 0x7E2/0x7E7)?
+5. ~~Any UDS DIDs beyond the OVMS set (try 0x22 on 0x7E2/0x7E7)?~~ — 0x7E2
+   does not answer on this car (answered 2026-10-10); 0x7E7/BECM still worth
+   probing beyond the cell PIDs.

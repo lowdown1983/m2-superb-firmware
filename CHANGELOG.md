@@ -9,6 +9,24 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Fixed (2026-10-10 — ELM327 genuine-behavior deviations, found by differential probe)
+- `reply()` now terminates text replies `\r\r>` like a genuine ELM327 (was
+  `\r>`); ATZ prints `\rELM327 v1.5\r` so its framing is also `\r\r>`.
+  Strict parsers (Car Scanner) are the likely victim of the old form —
+  prime suspect for its ECU connection failure.
+- Multi-ECU response buffer in `obdCan()`: `resps[4]` -> `[8]`. The Bolt EV
+  has five modules answering functional requests; the 5th response was
+  dropped, hiding one ECU's PIDs from app sensor scans.
+- ATDPN now answers `A0` when protocol is AUTO and nothing has connected
+  yet (was `0`); matches genuine ELM327 behavior in app init sequences.
+- New probe harness `sim/tests/elm_probe.py` drives Torque's and Car
+  Scanner's init sequences through the BT-shim -> SuperB -> Bee -> M2 path.
+  (`src/m2/mode_elm.cpp`)
+- Evidence: 5/5 sim smoke tests pass via the probe. In-vehicle Car Scanner
+  connect still needs a `debug on` in-car log to confirm. Speed gap vs the
+  clone is partly architectural (phone -> BT -> SuperB -> Bee 115200 ->
+  M2 -> CAN round trip), not all of it fixable in firmware.
+
 ### Added (2026-10-10 — pre-commit gate made clone-safe)
 - Tracked hook copy `scripts/hooks/pre-commit` + installer
   `scripts/install-git-hooks.sh` (re-run after a fresh clone; the previous
