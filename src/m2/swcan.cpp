@@ -138,12 +138,17 @@ bool acquire(uint32_t speed)
     hw.setupSW(speed);  // shim records the speed (INFERRED stand-in)
 #endif
     curSpeed = speed;
+    // Listen-only BEFORE the transceiver wakes: the MCP2515 leaves Init()
+    // in MODE_NORMAL, so applying it here — while the TH8056 is still
+    // asleep — is the only way the controller never sees the live bus in
+    // normal mode. Same ordering as recover() below. No-op for
+    // non-passive callers (wantListenOnly=false -> MODE_NORMAL, already).
+    applyListenOnly();
     // TH8056 to NORMAL with the Sleep->Normal settle. driveModePins is
     // GPIO-only, so this is safe even if the SPI init above were skipped.
     driveModePins(Mode::NORMAL);
     settleFor(Mode::SLEEP, Mode::NORMAL);
     curMode = Mode::NORMAL;
-    applyListenOnly();
     attachInterrupt(SWC_INT, isrTrampoline, FALLING);
     isAcquired = true;
     busstat::setPresent(busstat::Bus::SWCAN, true);
@@ -155,6 +160,18 @@ void release()
 {
     // INT first (ownership rule: IRQ before transceiver), then sleep.
     detachInterrupt(SWC_INT);
+#ifndef SIM_M2
+    // Card quiesce rule: sleep the MCP2515 — not just the TH8056 — when the
+    // controller was initialized. ABAT first so no queued TX buffer can
+    // fire on a later wake (same pattern as W-5). SPI ARBITER guarded.
+    // Skipped when never acquired: the GPIO fallback below covers it.
+    if (isAcquired) {
+        noInterrupts();
+        hw.Write(CANCTRL, (uint8_t)(hw.Read(CANCTRL) | CANCTRL_ABAT));
+        hw.Mode(MODE_SLEEP);
+        interrupts();
+    }
+#endif
     Mode was = curMode;
     driveModePins(Mode::SLEEP);  // GPIO-only: safe even if never acquired
     // Reviewer M3: the sleep transition gets its settle wait too, so a

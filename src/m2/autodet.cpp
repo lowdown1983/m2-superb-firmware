@@ -7,6 +7,7 @@
 #include "j1850.h"
 #include "swcan.h"
 #include "kline.h"
+#include "silent_pins.h"
 #include "debug.h"
 #include <due_can.h>
 #include <string.h>
@@ -35,8 +36,12 @@ bool isKnownId(uint32_t id, bool ext)
 // One listen-only CAN sweep step. Returns frames seen.
 uint32_t canListen(uint32_t baud, bool ext, uint32_t& knownHits)
 {
+    // INV-SILENT (F-2): transceiver-level silence for the whole sweep step.
+    // Asserted BEFORE begin(): even the brief normal-mode window between
+    // begin() and setListenOnlyMode(true) cannot ACK with S held HIGH.
+    silentpins::enter(0);
     // Pin-safety: 255 = no transceiver-enable pin driving (invariant).
-    if (!Can0.begin(baud, 255)) return 0;
+    if (!Can0.begin(baud, 255)) { silentpins::exit(0); return 0; }
     Can0.setListenOnlyMode(true);  // due_can 2.1.6: silent monitoring
     for (int f = 0; f < 7; f++) Can0.setRXFilter(f, 0, 0, ext);
     uint32_t t0 = millis();
@@ -54,6 +59,7 @@ uint32_t canListen(uint32_t baud, bool ext, uint32_t& knownHits)
     }
     Can0.setListenOnlyMode(false);
     Can0.disable();  // pin-safe: begun with 255 above
+    silentpins::exit(0);  // INV-SILENT: restore S pin on every exit path
     return frames;
 }
 
@@ -75,10 +81,11 @@ uint32_t j1850Listen(bool pwm, uint32_t ms)
 }
 
 // Passive SWCAN listen at 33.33k. The MCP2515 is held in listen-only mode
-// for the whole window (no ACKs, no transmits — genuinely passive): the
-// flag is set BEFORE acquire() so the controller never participates in
-// the live bus in normal mode, and restored AFTER release() on every
-// exit path so later SWCAN users (M2RET, gateway) are unaffected.
+// for the whole window (no ACKs, no transmits — genuinely passive):
+// acquire() applies listen-only while the TH8056 is still asleep, so the
+// controller never sees the live bus in normal mode. The flag is set
+// BEFORE acquire() and restored AFTER release() on every exit path so
+// later SWCAN users (M2RET, gateway) are unaffected.
 uint32_t swcanListen(uint32_t ms)
 {
     swcan::setListenOnly(true);

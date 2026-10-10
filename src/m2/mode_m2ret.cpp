@@ -607,8 +607,11 @@ void setPromiscuousMode()
 
 void swcanSleep()
 {
-    // GPIO-only: safe before/after any MCP2515 init.
-    swcan::sleepGpio();
+    // Hardened release(): TH8056 to sleep via GPIO, plus MCP2515 to sleep
+    // when it was acquired (card quiesce rule). Still safe when the
+    // MCP2515 was never initialized — release() degrades to GPIO-only.
+    // Note: up to ~100 ms TH8056 settle, only when SWCAN was acquired.
+    swcan::release();
 }
 
 void swcanEnter()

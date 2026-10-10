@@ -698,10 +698,14 @@ void ModeManager::quiesceBuses()
     if (can1Begun) Can1.disable();
     busstat::setPresent(busstat::Bus::CAN_BUS0, false);  // Phase 6
     busstat::setPresent(busstat::Bus::CAN_BUS1, false);
-    // 2. SWCAN TH8056 transceiver to sleep. m2ret::swcanSleep() is pure GPIO
-    //    (SWC_M0/SWC_M1) — safe even if the MCP2515 was never initialized.
+    // 2. SWCAN to sleep. m2ret::swcanSleep() routes through
+    //    swcan::release(): TH8056 transceiver to sleep via GPIO, plus the
+    //    MCP2515 to sleep when it was acquired (card quiesce rule) — safe
+    //    even if the MCP2515 was never initialized (GPIO-only fallback).
     //    Sleep encoding VERIFIED: mode(0) = M0 LOW, M1 LOW
     //    (MCP2515_sw_can.cpp:49-52, Macchina Single-Wire-CAN-mcp2515).
+    //    Note: up to ~100 ms TH8056 settle on this path, only when SWCAN
+    //    was actually acquired.
     m2ret::swcanSleep();
     // 3. J1850 rail off + driver released (idempotent: safe even if ELM
     //    never acquired it). Also detaches the RX ISR and parks TX pins.

@@ -55,6 +55,40 @@ independently reviewed)
   sized, timing-dependent — coarse by design, documented in the broker
   docstring.
 
+### Fixed (2026-10-10 — ChatGPT same-day hardware-interface audit, applied on Marcus's approval)
+- Finding 1 (Major): the auto-detect CAN listen sweep (`autodet::canListen`)
+  never asserted the TJA1051 silent-mode pin — the only listen-only path in
+  violation of our own INV-SILENT invariant (F-2; ELM and M2RET paths
+  comply). `silentpins::enter(0)` now runs before `Can0.begin()` and
+  `silentpins::exit(0)` after `disable()` on every exit path, so even the
+  brief normal-mode window between `begin()` and `setListenOnlyMode(true)`
+  cannot ACK (`src/m2/autodet.cpp`).
+- Finding 2 (Major): `swcan::acquire()` left the MCP2515 in `MODE_NORMAL`
+  (where `Init()` leaves it) through the TH8056 wake and 50 ms settle before
+  applying listen-only — the "passive" SWCAN stage could ACK live-bus
+  frames. `applyListenOnly()` now runs immediately after the Init/health
+  check, while the TH8056 is still asleep (same ordering `recover()` already
+  used; no-op for non-passive callers). The `swcanListen` comment that
+  falsely claimed the controller "never participates in the live bus in
+  normal mode" is corrected (`src/m2/swcan.cpp`, `src/m2/autodet.cpp`).
+- Finding 3 (Minor): SWCAN shutdown never slept the MCP2515 — only the
+  TH8056 GPIOs — violating the card's quiesce rule. `swcan::release()` now
+  aborts queued TX (CANCTRL ABAT, W-5 pattern) and requests
+  `MODE_SLEEP` under the SPI arbiter when the controller was acquired, and
+  `m2ret::swcanSleep()` routes through `release()` so the mode-change
+  quiesce path complies too. Pure-GPIO fallback preserved when the MCP2515
+  was never initialized. Note: up to ~100 ms TH8056 settle on mode switch,
+  only when SWCAN was actually acquired (`src/m2/swcan.cpp`,
+  `src/m2/mode_m2ret.cpp`, `src/m2/mode_manager.cpp`).
+- Auditor question 1 resolved (card bug, not firmware): the auditor hardware
+  card listed CAN pins as 62/63/68/69; the knowledge pack (VERIFIED from
+  schematic + variant files) and the Bolt vehicle run agree on
+  CANRX0=69/CANTX0=70/CANRX1=72/CANTX1=73 with silent pins 71/74. Card row
+  corrected (`auditor-brief/AUDITOR_HARDWARE_CARD.md`).
+- Still open (unchanged): F-07 log-access policy (`/logs`, `/log_dl` have
+  no role check) and the raw `0x34/0x36/0x37` console path — both are
+  Marcus's policy calls, not decided.
+
 ### Fixed (2026-10-10 — 2026-10-09 firmware audit findings F-02/F-03 + hardening
 fixes, applied on Marcus's approval)
 - F-02 (Major): DBC physical-value scaling was wrong by a factor of 1000 —

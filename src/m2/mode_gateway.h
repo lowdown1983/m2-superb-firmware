@@ -31,7 +31,7 @@
 // Resource claims: CAN0 (begun at entry, staged baud) + SWCAN via
 // swcan:: (acquired at entry, staged speed) + UART0/Bee (never
 // released). quiesceBuses() handles both (native via begun flags,
-// TH8056 via sleepGpio) — no manager change needed beyond the
+// SWCAN via swcan::release()) — no manager change needed beyond the
 // standard enter/exit pair.
 //
 // Console (SerialUSB): "gateway ..." — status, map add/del/list,

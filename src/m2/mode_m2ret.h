@@ -40,7 +40,7 @@ void loop();    // pump Serial bytes + poll CAN buses
 // datasheet settling, MCP2515 health monitoring).
 void swcanEnter();  // swcan::acquire(speed): MCP2515 init + NORMAL + INT
 void swcanExit();   // swcan::release(): INT detached + TH8056 sleep
-void swcanSleep();  // GPIO-only sleep; safe even if never initialized
+void swcanSleep();  // quiesce-path sleep via swcan::release(); safe even if never initialized
 void swcanSetSpeed(uint32_t speed);  // live speed change (mm channel)
 
 // mm channel live-apply sync: keeps GVRET cmd-5/6 replies consistent when
