@@ -9,6 +9,59 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Fixed (2026-10-10 — 2026-10-09 firmware audit findings F-02/F-03 + hardening
+fixes, applied on Marcus's approval)
+- F-02 (Major): DBC physical-value scaling was wrong by a factor of 1000 —
+  `dbcsig::decode()` divided milli-units back down to plain physical units,
+  destroying fractional precision. `phys1000` is now true milli-units per
+  the `SignalVal` contract, with int32 saturation on narrowing
+  (`src/m2/dbcsig.cpp`).
+- F-03 (Moderate): five CAN IDs occur in more than one embedded DBC and
+  `decode()` silently took the first table entry, decoding shadowed
+  vehicles' frames under the wrong layout. `scripts/dbc_extract.py` now
+  emits a per-message DBC index (`dbc_gen.h` regenerated with the new
+  `Msg.dbc` field); `dbcsig::selectDbc(idx)` / `selectedDbc()` scope ID
+  lookup to one DBC (`-1` = legacy first-match default); new console
+  command `dbc select <idx|name|all>` (`src/m2/mode_manager.cpp`).
+- O-1: the ISO-TP reassembly table (`Reasm r[MAX_REASM]`, ~1 KB) lived on
+  the stack in `isotp::requestMulti()` — moved to function-static storage
+  with an explicit reset each call (single-threaded by firmware contract:
+  console paths only) (`src/m2/isotp.cpp`).
+- W-2: the K-line tester-present keep-alive ran through `sendOnly()`'s
+  200 ms transceiver-echo wait from a `txsched` callback, stalling the main
+  loop every period. New `testerPresentFire()` is fire-and-forget
+  (0x3E is response-suppressed by definition); echo verification stays in
+  `sendOnly()`/`transact()` for real traffic (`src/m2/kline.cpp`).
+- W-4: J1850 PWM arbitration now concedes on a stuck bus — if the bus stays
+  active past `onUs + tolerance` with no release, the frame reports
+  ARB_LOST instead of spinning on the sanity bound (`src/m2/j1850.cpp`).
+- W-5: SWCAN `poll()` now clears stale MCP2515 error flags and aborts
+  queued TX (CANCTRL ABAT bit, set directly — the vendored MCP2515 lib
+  exposes no Abort API) before re-requesting NORMAL, so a bus-off caused
+  by a flooding `txsched` slot can't resume transmitting the stale queue
+  on recovery (`src/m2/swcan.cpp`).
+- C-1: J1850 TX no longer masks interrupts for the whole frame (~34 ms
+  blackout that starved CAN RX ISRs and the Bee UART ring). Each
+  drive+spin pair is now masked individually (`vpwDriveSpin`/
+  `pwmDriveSpin`); arbitration polls run unmasked. Worst-case continuous
+  blackout is one driven section (VPW SOF 200 us) (`src/m2/j1850.cpp`).
+- Grok audit: `Can0/Can1.begin()` return values are now honored — M2RET
+  `applyCanBusConfig()` and `mmSetCanBaud()` only set the begun/applied
+  flags on success; a failed begin leaves the bus disabled instead of
+  claiming it live (`src/m2/mode_m2ret.cpp`, `src/m2/mode_manager.cpp`).
+- Defensive: `mm_channel` logPoll reply clamps `nRec` to the documented
+  <=1 contract before framing the reply (`src/m2/mm_channel.cpp`).
+- Still open (unchanged): F-07 log-access policy (`/logs`, `/log_dl` have
+  no role check) and the raw `0x34/0x36/0x37` console path — both are
+  Marcus's policy calls, not decided.
+
+### Added (2026-10-10)
+- Bolt EV test-support package (`docs/bolt-ev/`): `BOLT_EV_TEST.md`
+  per-mode test plan for the 2023 Chevy Bolt EV (PROG excluded; safety
+  boundaries: no contactor commands, no TX while driving),
+  `ATTRIBUTION.md`, and vendored `bolt17.json`/`bolt19.json` PID data
+  from iternio/ev-obd-pids (Apache 2.0).
+
 ### Fixed (2026-10-09 — ChatGPT audit Section 03, applied on Marcus's approval)
 - F-03-01 (HIGH): the UDS/PROG transfer engine now enforces the declared
   image length end to end — `xfer::State.declaredLen`, `open()` takes the

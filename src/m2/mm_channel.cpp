@@ -625,6 +625,7 @@ void dispatch()
             uint8_t nRec = 0;
             uint8_t n = ops->logPoll(rep + 3, nRec);
             (void)n;
+            if (nRec > 1) nRec = 1;  // defensive: ops contract is <=1
             rep[1] = ST_OK;
             rep[2] = nRec;
             sendReply(rep, 3 + nRec * 23);

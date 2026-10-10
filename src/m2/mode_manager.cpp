@@ -1882,7 +1882,37 @@ static void consoleDbc(char* line)
         }
         return;
     }
-    SerialUSB.println(F("dbc list | info <n> | decode <id-hex> <byte-hex...>"));
+    if (strcasecmp(tok, "select") == 0) {
+        // F-03: dbc select <idx|name|all> — scope ID lookup to one DBC so
+        // shadowed duplicate CAN IDs decode under the right layout.
+        char* a = strtok_r(nullptr, " \t", &save);
+        if (!a) {
+            int8_t cur = dbcsig::selectedDbc();
+            SerialUSB.print(F("active DBC: "));
+            if (cur < 0) SerialUSB.println(F("all (first-match)"));
+            else SerialUSB.println(dbcsig::dbcName((uint8_t)cur));
+            return;
+        }
+        if (strcasecmp(a, "all") == 0) {
+            dbcsig::selectDbc(-1);
+            SerialUSB.println(F("active DBC: all (first-match)"));
+            return;
+        }
+        int8_t idx = -2;
+        char* end = nullptr;
+        long v = strtol(a, &end, 10);
+        if (end && *end == '\0' && v >= 0 && v < dbcsig::dbcCount()) idx = (int8_t)v;
+        else {
+            for (uint8_t i = 0; i < dbcsig::dbcCount(); i++)
+                if (strcasecmp(a, dbcsig::dbcName(i)) == 0) { idx = (int8_t)i; break; }
+        }
+        if (idx < 0) { SerialUSB.println(F("no such DBC (try: dbc list)")); return; }
+        dbcsig::selectDbc(idx);
+        SerialUSB.print(F("active DBC: "));
+        SerialUSB.println(dbcsig::dbcName((uint8_t)idx));
+        return;
+    }
+    SerialUSB.println(F("dbc list | info <n> | decode <id-hex> <byte-hex...> | select <idx|name|all>"));
 }
 
 void ModeManager::handleConsoleLine(char* line)
@@ -1905,7 +1935,7 @@ void ModeManager::handleConsoleLine(char* line)
         SerialUSB.println(F("          profile save <name> | load | show | clear (Phase 12)"));
         SerialUSB.println(F("          log start|stop|status|clear|trig <kind> <svc>|arm <pre> <post> (Phase 12)"));
         SerialUSB.println(F("          harness run [mask] | selfcheck | status (Phase 12, HARNESS mode)"));
-        SerialUSB.println(F("          dbc list | info <n> | decode <id> (Phase 12 DBC signals)"));
+        SerialUSB.println(F("          dbc list | info <n> | decode <id> | select <idx|name|all> (Phase 12 DBC signals)"));
         SerialUSB.println(F("          m2ret <CMD> (Phase 12 modernization; M2RET mode)"));
         SerialUSB.println(F("          slcan status (Phase 12; SLCAN mode)"));
         return;
@@ -2102,8 +2132,12 @@ uint8_t ModeManager::mmSetCanBaud(uint8_t bus, uint32_t baud, uint8_t& applied)
     // both write through here eventually). ELM applies its protocol baud
     // on next ATSP/activation — staged, documented.
     if (currentMode == Mode::M2RET) {
-        if (bus == 0) { Can0.begin(baud, 255); can0Begun = true; }
-        else { Can1.begin(baud, 255); can1Begun = true; }
+        // Grok audit: begin() can fail — only claim begun/present/applied
+        // on success. The flags must mean "successfully begun".
+        bool ok;
+        if (bus == 0) { ok = Can0.begin(baud, 255) != 0; can0Begun = ok; }
+        else { ok = Can1.begin(baud, 255) != 0; can1Begun = ok; }
+        if (!ok) return mm::ST_ERR;
         busstat::setPresent(bus == 0 ? busstat::Bus::CAN_BUS0 : busstat::Bus::CAN_BUS1,
                             true);  // Phase 6
         m2ret::setPromiscuousMode();

@@ -186,10 +186,15 @@ void applyCanBusConfig(uint8_t which, uint32_t word)
         if (word > 1000000) word = 1000000;
         // 255 = no transceiver-enable pin (M2 pin-safety rule, see
         // mode_manager.cpp header). M2RET does Can0.begin(speed, 255).
-        can.begin(word, 255);
-        speed = word;
-        canSafeToDisable = true;
-        setPromiscuousMode();
+        // Grok audit: begin() can fail — only claim begun/safe-to-disable
+        // on success; a failed begin leaves the bus disabled.
+        if (can.begin(word, 255) != 0) {
+            speed = word;
+            canSafeToDisable = true;
+            setPromiscuousMode();
+        } else {
+            enabled = false;
+        }
     } else {
         // Guarded: a disable() before any begin(...,255) would drive
         // Arduino 50/48 (J1850_PWM_VPW / 5V buck-boost). Cannot happen via

@@ -27,6 +27,8 @@ struct Msg {
     uint16_t nSig;
     uint8_t dlc;
     uint8_t ext;
+    uint8_t dbc;   // F-03: index into DBC_NAMES[];
+                   // disambiguates duplicate CAN IDs
 };
 
 struct EnumVal {
@@ -36,224 +38,224 @@ struct EnumVal {
 };
 
 static const Msg MSG[] = {
-    { 0x82, 0, 10, 8, 0 },  // ford_fusion_2018_pt:EPAS_INFO
-    { 0x76, 10, 5, 8, 0 },  // ford_fusion_2018_pt:Steering_Wheel_Data_CG1
-    { 0x83, 15, 8, 8, 0 },  // ford_fusion_2018_pt:Steering_Buttons
-    { 0x91, 23, 3, 8, 0 },  // ford_fusion_2018_pt:Yaw_Data
-    { 0x92, 26, 6, 8, 0 },  // ford_fusion_2018_pt:Accel_Data
-    { 0x165, 32, 3, 8, 0 },  // ford_fusion_2018_pt:Cruise_Status
-    { 0x204, 35, 1, 8, 0 },  // ford_fusion_2018_pt:EngineData_14
-    { 0x217, 36, 4, 8, 0 },  // ford_fusion_2018_pt:WheelSpeed_CG1
-    { 0x216, 40, 9, 8, 0 },  // ford_fusion_2018_pt:WheelData
-    { 0x3B3, 49, 4, 8, 0 },  // ford_fusion_2018_pt:Doors
-    { 0x3C3, 53, 1, 8, 0 },  // ford_fusion_2018_pt:BCM_to_HS_Body
-    { 0x3CA, 54, 4, 8, 0 },  // ford_fusion_2018_pt:Lane_Keep_Assist_Control
-    { 0x3CC, 58, 3, 8, 0 },  // ford_fusion_2018_pt:Lane_Keep_Assist_Status
-    { 0x3D8, 61, 6, 8, 0 },  // ford_fusion_2018_pt:Lane_Keep_Assist_Ui
-    { 0x1D6, 67, 7, 7, 0 },  // gm_global_a_powertrain_expansion:APM_Stats
-    { 0x1D4, 74, 2, 2, 0 },  // gm_global_a_powertrain_expansion:APM_Command
-    { 0x100, 76, 9, 8, 0 },  // mazda_3_2019:CAM_Start
-    { 0x166, 85, 3, 8, 0 },  // mazda_3_2019:CAM_End
-    { 0x4C0, 88, 5, 8, 0 },  // mazda_3_2019:CAM_69
-    { 0x460, 93, 4, 8, 0 },  // mazda_3_2019:CAM_KEEP_ALIVE_2
-    { 0x59C, 97, 4, 8, 0 },  // mazda_3_2019:CAM_71
-    { 0x12, 101, 6, 8, 0 },  // mazda_3_2019:STEER
-    { 0x101, 107, 9, 8, 0 },  // mazda_3_2019:LKAS
-    { 0x102, 116, 6, 8, 0 },  // mazda_3_2019:NEW_MSG_3
-    { 0x1C, 122, 4, 8, 0 },  // mazda_3_2019:WHEEL_SPEEDS
-    { 0x103, 126, 4, 8, 0 },  // mazda_3_2019:NEW_MSG_5
-    { 0x104, 130, 3, 8, 0 },  // mazda_3_2019:NEW_MSG_6
-    { 0x105, 133, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_7
-    { 0x106, 134, 2, 8, 0 },  // mazda_3_2019:NEW_MSG_8
-    { 0x107, 136, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_9
-    { 0x136, 137, 3, 8, 0 },  // mazda_3_2019:NEW_MSG_10
-    { 0x134, 140, 8, 8, 0 },  // mazda_3_2019:ACC_POSSIBLY
-    { 0x130, 148, 8, 8, 0 },  // mazda_3_2019:CAM_LANES
-    { 0x131, 156, 8, 8, 0 },  // mazda_3_2019:CAM_LANES_2_MAYBE
-    { 0x160, 164, 4, 8, 0 },  // mazda_3_2019:NEW_MSG_14
-    { 0x163, 168, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_15
-    { 0x164, 169, 2, 8, 0 },  // mazda_3_2019:NEW_MSG_16
-    { 0x165, 171, 3, 8, 0 },  // mazda_3_2019:NEW_MSG_17
-    { 0x3B, 174, 5, 8, 0 },  // mazda_3_2019:STEER_RATE
-    { 0x18, 179, 4, 8, 0 },  // mazda_3_2019:BRAKE_PEDAL
-    { 0x1A, 183, 4, 8, 0 },  // mazda_3_2019:ENGINE_DATA
-    { 0x91, 187, 5, 8, 0 },  // mazda_3_2019:BLINK_INFO
-    { 0x10, 192, 9, 8, 0 },  // mazda_3_2019:STEER_TORQUE
-    { 0x11, 201, 7, 8, 0 },  // mazda_3_2019:STEER_TORQUE_2
-    { 0x1D, 208, 7, 8, 0 },  // mazda_3_2019:WHEEL
-    { 0x1F, 215, 4, 8, 0 },  // mazda_3_2019:GEAR
-    { 0x60, 219, 12, 8, 0 },  // mazda_3_2019:STEER2
-    { 0x4B9, 231, 8, 8, 0 },  // mazda_3_2019:KEEP_ALIVE_1
-    { 0x25, 239, 4, 8, 0 },  // mazda_3_2019:BLANK_1
-    { 0x2C, 243, 4, 8, 0 },  // mazda_3_2019:BLANK_2
-    { 0x80, 247, 8, 8, 0 },  // mazda_3_2019:RADARS
-    { 0x81, 255, 4, 8, 0 },  // mazda_3_2019:NEW_MSG_19
-    { 0x40A, 259, 4, 8, 0 },  // mazda_3_2019:KEEP_ALIVE_2
-    { 0x4B0, 263, 4, 8, 0 },  // mazda_3_2019:KEEP_ALIVE_3
-    { 0x162, 267, 4, 8, 0 },  // mazda_3_2019:CAM_KEEP_ALIVE_1
-    { 0x150, 271, 5, 8, 0 },  // mazda_3_2019:NEW_MSG_20
-    { 0x156, 276, 8, 8, 0 },  // mazda_3_2019:NEW_MSG_21
-    { 0x108, 284, 3, 8, 0 },  // mazda_3_2019:NEW_MSG_2
-    { 0x16, 287, 4, 8, 0 },  // mazda_3_2019:CRZ_CTRL_BTNS
-    { 0x132, 291, 6, 8, 0 },  // mazda_3_2019:CAM_LANE_3_MAYBE
-    { 0x133, 297, 5, 8, 0 },  // mazda_3_2019:NEW_MSG_1
-    { 0x140, 302, 4, 8, 0 },  // mazda_3_2019:NEW_MSG_4
-    { 0x141, 306, 2, 8, 0 },  // mazda_3_2019:NEW_MSG_11
-    { 0x125, 308, 3, 8, 0 },  // mazda_3_2019:NEW_MSG_12
-    { 0x126, 311, 3, 8, 0 },  // mazda_3_2019:NEW_MSG_13
-    { 0x124, 314, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_18
-    { 0x123, 315, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_22
-    { 0x122, 316, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_23
-    { 0x115, 317, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_24
-    { 0x116, 318, 0, 8, 0 },  // mazda_3_2019:NEW_MSG_25
-    { 0x111, 318, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_26
-    { 0x112, 319, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_27
-    { 0x121, 320, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_28
-    { 0x14, 321, 1, 8, 0 },  // mazda_3_2019:NEW_MSG_29
-    { 0x120, 322, 0, 8, 0 },  // mazda_3_2019:NEW_MSG_30
-    { 0x4AC, 322, 8, 8, 0 },  // toyota_2017_ref_pt:ABG1D50
-    { 0x4BC, 330, 8, 8, 0 },  // toyota_2017_ref_pt:ABG1D51
-    { 0x3B1, 338, 6, 8, 0 },  // toyota_2017_ref_pt:ABG1S01
-    { 0x344, 344, 20, 8, 0 },  // toyota_2017_ref_pt:ACC1F01
-    { 0x4CB, 364, 4, 8, 0 },  // toyota_2017_ref_pt:ACC1N01
-    { 0x343, 368, 15, 8, 0 },  // toyota_2017_ref_pt:ACC1S03
-    { 0x380, 383, 17, 8, 0 },  // toyota_2017_ref_pt:ACN1S01
-    { 0x381, 400, 33, 8, 0 },  // toyota_2017_ref_pt:ACN1S04
-    { 0x3B0, 433, 6, 6, 0 },  // toyota_2017_ref_pt:ACN1S07
-    { 0x4E2, 439, 4, 8, 0 },  // toyota_2017_ref_pt:AFS1N01
-    { 0x391, 443, 8, 8, 0 },  // toyota_2017_ref_pt:AFS1S01
-    { 0x34D, 451, 3, 5, 0 },  // toyota_2017_ref_pt:AFS1S02
-    { 0x414, 454, 3, 8, 0 },  // toyota_2017_ref_pt:AHB1S01
-    { 0x384, 457, 15, 6, 0 },  // toyota_2017_ref_pt:AVN1S01
-    { 0x386, 472, 21, 6, 0 },  // toyota_2017_ref_pt:AVN1S03
-    { 0x38F, 493, 12, 8, 0 },  // toyota_2017_ref_pt:AVN1S07
-    { 0x389, 505, 24, 8, 0 },  // toyota_2017_ref_pt:AVN1S08
-    { 0x3E6, 529, 7, 5, 0 },  // toyota_2017_ref_pt:AVN1S11
-    { 0x3A5, 536, 11, 8, 0 },  // toyota_2017_ref_pt:AVN1S13
-    { 0x3A8, 547, 6, 5, 0 },  // toyota_2017_ref_pt:AVN1S16
-    { 0x3E7, 553, 9, 7, 0 },  // toyota_2017_ref_pt:AVN1S17
-    { 0x3E8, 562, 8, 8, 0 },  // toyota_2017_ref_pt:AVN1S18
-    { 0x3E9, 570, 8, 8, 0 },  // toyota_2017_ref_pt:AVN1S19
-    { 0x434, 578, 10, 8, 0 },  // toyota_2017_ref_pt:AVN1S20
-    { 0x435, 588, 21, 8, 0 },  // toyota_2017_ref_pt:AVN1S21
-    { 0x413, 609, 9, 8, 0 },  // toyota_2017_ref_pt:AVN1S31
-    { 0x40140639, 618, 13, 8, 1 },  // toyota_2017_ref_pt:BDB1F01_14
-    { 0x4016063B, 631, 4, 8, 1 },  // toyota_2017_ref_pt:BDB1F03_16
-    { 0x40100620, 635, 18, 8, 1 },  // toyota_2017_ref_pt:BDB1S01_10
-    { 0x40110621, 653, 4, 8, 1 },  // toyota_2017_ref_pt:BDB1S02_11
-    { 0x40120622, 657, 17, 8, 1 },  // toyota_2017_ref_pt:BDB1S03_12
-    { 0x40190623, 674, 15, 8, 1 },  // toyota_2017_ref_pt:BDB1S04_19
-    { 0x40130638, 689, 17, 8, 1 },  // toyota_2017_ref_pt:BDB1S05_13
-    { 0x40170630, 706, 5, 8, 1 },  // toyota_2017_ref_pt:BDB1S06_17
-    { 0x40180631, 711, 8, 8, 1 },  // toyota_2017_ref_pt:BDB1S07_18
-    { 0x401A0624, 719, 11, 8, 1 },  // toyota_2017_ref_pt:BDB1S08_1A
-    { 0x401D0627, 730, 4, 8, 1 },  // toyota_2017_ref_pt:BDB1S11_1D
-    { 0x4098063C, 734, 9, 8, 1 },  // toyota_2017_ref_pt:BDB1S17_98
-    { 0x4099063D, 743, 7, 8, 1 },  // toyota_2017_ref_pt:BDB1S18_99
-    { 0x3FC, 750, 3, 8, 0 },  // toyota_2017_ref_pt:BDB1S19
-    { 0x409A063E, 753, 4, 8, 1 },  // toyota_2017_ref_pt:BDB1S20_9A
-    { 0x409B063F, 757, 10, 8, 1 },  // toyota_2017_ref_pt:BDB1S21_9B
-    { 0x3ED, 767, 4, 2, 0 },  // toyota_2017_ref_pt:BGM1S01
-    { 0x4D5, 771, 4, 8, 0 },  // toyota_2017_ref_pt:BSR1N01
-    { 0x3F6, 775, 3, 8, 0 },  // toyota_2017_ref_pt:BSR1S01
-    { 0x45A, 778, 1, 8, 0 },  // toyota_2017_ref_pt:CGW1N02
-    { 0x4CC, 779, 4, 8, 0 },  // toyota_2017_ref_pt:CSR1N01
-    { 0x396, 783, 21, 7, 0 },  // toyota_2017_ref_pt:CSR1S01
-    { 0x40D606D1, 804, 1, 8, 1 },  // toyota_2017_ref_pt:DMS1S02_D6
-    { 0x365, 805, 14, 7, 0 },  // toyota_2017_ref_pt:DS11D70
-    { 0x366, 819, 13, 7, 0 },  // toyota_2017_ref_pt:DS11D71
-    { 0x367, 832, 7, 2, 0 },  // toyota_2017_ref_pt:DS11D72
-    { 0x283, 839, 15, 7, 0 },  // toyota_2017_ref_pt:DS11F01
-    { 0x411, 854, 21, 8, 0 },  // toyota_2017_ref_pt:DS12F02
-    { 0x412, 875, 18, 8, 0 },  // toyota_2017_ref_pt:DS12F03
-    { 0x4B7, 893, 8, 8, 0 },  // toyota_2017_ref_pt:ECO1D50
-    { 0x163, 901, 8, 5, 0 },  // toyota_2017_ref_pt:ECO1S01
-    { 0x39A, 909, 14, 8, 0 },  // toyota_2017_ref_pt:ECO1S90
-    { 0x49E, 923, 8, 8, 0 },  // toyota_2017_ref_pt:ECT1D50
-    { 0x49F, 931, 8, 8, 0 },  // toyota_2017_ref_pt:ECT1D51
-    { 0x4B0, 939, 8, 8, 0 },  // toyota_2017_ref_pt:ECT1D52
-    { 0x4B1, 947, 8, 8, 0 },  // toyota_2017_ref_pt:ECT1D53
-    { 0x4B2, 955, 8, 8, 0 },  // toyota_2017_ref_pt:ECT1D54
-    { 0x4B3, 963, 8, 8, 0 },  // toyota_2017_ref_pt:ECT1D55
-    { 0x1D0, 971, 22, 8, 0 },  // toyota_2017_ref_pt:ECT1F03
-    { 0x2D5, 993, 1, 2, 0 },  // toyota_2017_ref_pt:ECT1S10
-    { 0x3BC, 994, 20, 8, 0 },  // toyota_2017_ref_pt:ECT1S92
-    { 0x498, 1014, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D50
-    { 0x499, 1022, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D51
-    { 0x49A, 1030, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D52
-    { 0x49B, 1038, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D53
-    { 0x49C, 1046, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D54
-    { 0x49D, 1054, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D55
-    { 0x4A8, 1062, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D56
-    { 0x4A7, 1070, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D57
-    { 0x4AD, 1078, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D58
-    { 0x4AE, 1086, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D59
-    { 0x4AF, 1094, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1D60
-    { 0x3F9, 1102, 12, 8, 0 },  // toyota_2017_ref_pt:ENG1F03
-    { 0x1C4, 1114, 16, 8, 0 },  // toyota_2017_ref_pt:ENG1F07
-    { 0x72, 1130, 3, 5, 0 },  // toyota_2017_ref_pt:ENG1F43
-    { 0x2C1, 1133, 13, 8, 0 },  // toyota_2017_ref_pt:ENG1S01
-    { 0x3C1, 1146, 2, 3, 0 },  // toyota_2017_ref_pt:ENG1S23
-    { 0x3D3, 1148, 1, 2, 0 },  // toyota_2017_ref_pt:ENG1S28
-    { 0x580, 1149, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1S51
-    { 0x581, 1157, 8, 8, 0 },  // toyota_2017_ref_pt:ENG1S52
-    { 0x582, 1165, 3, 8, 0 },  // toyota_2017_ref_pt:ENG1S54
-    { 0x3BB, 1168, 17, 8, 0 },  // toyota_2017_ref_pt:ENG1S92
-    { 0x399, 1185, 16, 8, 0 },  // toyota_2017_ref_pt:ENG1S95
-    { 0xEE, 1201, 4, 4, 0 },  // toyota_2017_ref_pt:ENG2F01
-    { 0x1D2, 1205, 18, 8, 0 },  // toyota_2017_ref_pt:ENG2F04
-    { 0x1D3, 1223, 13, 8, 0 },  // toyota_2017_ref_pt:ENG2F05
-    { 0x77, 1236, 6, 6, 0 },  // toyota_2017_ref_pt:ENG2F41
-    { 0x78, 1242, 5, 4, 0 },  // toyota_2017_ref_pt:ENG2F42
-    { 0x394, 1247, 1, 1, 0 },  // toyota_2017_ref_pt:EPS1S90
-    { 0x4D3, 1248, 4, 8, 0 },  // toyota_2017_ref_pt:FCM1N01
-    { 0x489, 1252, 13, 8, 0 },  // toyota_2017_ref_pt:FCM1S10
-    { 0x48A, 1265, 14, 8, 0 },  // toyota_2017_ref_pt:FCM1S11
-    { 0x48B, 1279, 9, 8, 0 },  // toyota_2017_ref_pt:FCM1S12
-    { 0x4FF, 1288, 4, 8, 0 },  // toyota_2017_ref_pt:FRD1N01
-    { 0x2E1, 1292, 10, 2, 0 },  // toyota_2017_ref_pt:FWM1S01
-    { 0x40820634, 1302, 6, 8, 1 },  // toyota_2017_ref_pt:IDT1S03_82
-    { 0x40830635, 1308, 3, 8, 1 },  // toyota_2017_ref_pt:IDT1S04_83
-    { 0x4E9, 1311, 4, 8, 0 },  // toyota_2017_ref_pt:KSS1N01
-    { 0x39F, 1315, 1, 1, 0 },  // toyota_2017_ref_pt:KSS1S90
-    { 0x4EF, 1316, 3, 8, 0 },  // toyota_2017_ref_pt:MAV1N01
-    { 0x40200610, 1319, 11, 8, 1 },  // toyota_2017_ref_pt:MET1S01_20
-    { 0x40210611, 1330, 7, 8, 1 },  // toyota_2017_ref_pt:MET1S02_21
-    { 0x40230619, 1337, 6, 8, 1 },  // toyota_2017_ref_pt:MET1S04_23
-    { 0x4024061A, 1343, 6, 8, 1 },  // toyota_2017_ref_pt:MET1S05_24
-    { 0x40270612, 1349, 4, 8, 1 },  // toyota_2017_ref_pt:MET1S08_27
-    { 0x40280613, 1353, 20, 8, 1 },  // toyota_2017_ref_pt:MET1S09_28
-    { 0x40290614, 1373, 6, 8, 1 },  // toyota_2017_ref_pt:MET1S10_29
-    { 0x402A0615, 1379, 7, 8, 1 },  // toyota_2017_ref_pt:MET1S11_2A
-    { 0x402B0616, 1386, 11, 8, 1 },  // toyota_2017_ref_pt:MET1S12_2B
-    { 0x3E0, 1397, 9, 8, 0 },  // toyota_2017_ref_pt:MET1S18
-    { 0x402006F3, 1406, 17, 8, 1 },  // toyota_2017_ref_pt:MET1S22_20
-    { 0x40E406C0, 1423, 8, 8, 1 },  // toyota_2017_ref_pt:PMN1F03_E4
-    { 0x4A9, 1431, 8, 8, 0 },  // toyota_2017_ref_pt:SCS1D50
-    { 0x4CA, 1439, 4, 8, 0 },  // toyota_2017_ref_pt:SCS1N01
-    { 0x2E8, 1443, 2, 8, 0 },  // toyota_2017_ref_pt:SCS1S01
-    { 0x32F, 1445, 3, 5, 0 },  // toyota_2017_ref_pt:SCS1S06
-    { 0x395, 1448, 7, 4, 0 },  // toyota_2017_ref_pt:SCS1S90
-    { 0x25, 1455, 12, 8, 0 },  // toyota_2017_ref_pt:STR1S01
-    { 0x423, 1467, 2, 1, 0 },  // toyota_2017_ref_pt:STR1S02
-    { 0xAA, 1469, 8, 8, 0 },  // toyota_2017_ref_pt:VSC1F01
-    { 0x1AA, 1477, 13, 6, 0 },  // toyota_2017_ref_pt:VSC1F02
-    { 0x226, 1490, 16, 8, 0 },  // toyota_2017_ref_pt:VSC1F06
-    { 0xB4, 1506, 4, 8, 0 },  // toyota_2017_ref_pt:VSC1S03
-    { 0x320, 1510, 23, 8, 0 },  // toyota_2017_ref_pt:VSC1S07
-    { 0x420, 1533, 10, 8, 0 },  // toyota_2017_ref_pt:VSC1S08
-    { 0xBA, 1543, 3, 4, 0 },  // toyota_2017_ref_pt:VSC1S12
-    { 0x232, 1546, 10, 6, 0 },  // toyota_2017_ref_pt:VSC1S14
-    { 0x228, 1556, 3, 4, 0 },  // toyota_2017_ref_pt:VSC1S29
-    { 0x490, 1559, 3, 1, 0 },  // toyota_2017_ref_pt:VSC1S92
-    { 0x3B7, 1562, 18, 8, 0 },  // toyota_2017_ref_pt:VSC1S95
-    { 0x427, 1580, 6, 8, 0 },  // toyota_2017_ref_pt:VSC1S96
-    { 0x221, 1586, 8, 5, 0 },  // toyota_2017_ref_pt:VSC2F05
-    { 0x220, 1594, 10, 4, 0 },  // toyota_2017_ref_pt:VSC2F07
-    { 0x24, 1604, 17, 8, 0 },  // toyota_2017_ref_pt:YGS1S03
-    { 0x40000682, 1621, 7, 8, 1 },  // toyota_2017_ref_pt:YGW1S01_0
-    { 0x40000683, 1628, 4, 8, 1 },  // toyota_2017_ref_pt:YGW1S02_0
-    { 0x40000686, 1632, 5, 8, 1 },  // toyota_2017_ref_pt:YGW1S05_0
+    { 0x82, 0, 10, 8, 0, 0 },  // ford_fusion_2018_pt:EPAS_INFO
+    { 0x76, 10, 5, 8, 0, 0 },  // ford_fusion_2018_pt:Steering_Wheel_Data_CG1
+    { 0x83, 15, 8, 8, 0, 0 },  // ford_fusion_2018_pt:Steering_Buttons
+    { 0x91, 23, 3, 8, 0, 0 },  // ford_fusion_2018_pt:Yaw_Data
+    { 0x92, 26, 6, 8, 0, 0 },  // ford_fusion_2018_pt:Accel_Data
+    { 0x165, 32, 3, 8, 0, 0 },  // ford_fusion_2018_pt:Cruise_Status
+    { 0x204, 35, 1, 8, 0, 0 },  // ford_fusion_2018_pt:EngineData_14
+    { 0x217, 36, 4, 8, 0, 0 },  // ford_fusion_2018_pt:WheelSpeed_CG1
+    { 0x216, 40, 9, 8, 0, 0 },  // ford_fusion_2018_pt:WheelData
+    { 0x3B3, 49, 4, 8, 0, 0 },  // ford_fusion_2018_pt:Doors
+    { 0x3C3, 53, 1, 8, 0, 0 },  // ford_fusion_2018_pt:BCM_to_HS_Body
+    { 0x3CA, 54, 4, 8, 0, 0 },  // ford_fusion_2018_pt:Lane_Keep_Assist_Control
+    { 0x3CC, 58, 3, 8, 0, 0 },  // ford_fusion_2018_pt:Lane_Keep_Assist_Status
+    { 0x3D8, 61, 6, 8, 0, 0 },  // ford_fusion_2018_pt:Lane_Keep_Assist_Ui
+    { 0x1D6, 67, 7, 7, 0, 1 },  // gm_global_a_powertrain_expansion:APM_Stats
+    { 0x1D4, 74, 2, 2, 0, 1 },  // gm_global_a_powertrain_expansion:APM_Command
+    { 0x100, 76, 9, 8, 0, 2 },  // mazda_3_2019:CAM_Start
+    { 0x166, 85, 3, 8, 0, 2 },  // mazda_3_2019:CAM_End
+    { 0x4C0, 88, 5, 8, 0, 2 },  // mazda_3_2019:CAM_69
+    { 0x460, 93, 4, 8, 0, 2 },  // mazda_3_2019:CAM_KEEP_ALIVE_2
+    { 0x59C, 97, 4, 8, 0, 2 },  // mazda_3_2019:CAM_71
+    { 0x12, 101, 6, 8, 0, 2 },  // mazda_3_2019:STEER
+    { 0x101, 107, 9, 8, 0, 2 },  // mazda_3_2019:LKAS
+    { 0x102, 116, 6, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_3
+    { 0x1C, 122, 4, 8, 0, 2 },  // mazda_3_2019:WHEEL_SPEEDS
+    { 0x103, 126, 4, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_5
+    { 0x104, 130, 3, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_6
+    { 0x105, 133, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_7
+    { 0x106, 134, 2, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_8
+    { 0x107, 136, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_9
+    { 0x136, 137, 3, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_10
+    { 0x134, 140, 8, 8, 0, 2 },  // mazda_3_2019:ACC_POSSIBLY
+    { 0x130, 148, 8, 8, 0, 2 },  // mazda_3_2019:CAM_LANES
+    { 0x131, 156, 8, 8, 0, 2 },  // mazda_3_2019:CAM_LANES_2_MAYBE
+    { 0x160, 164, 4, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_14
+    { 0x163, 168, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_15
+    { 0x164, 169, 2, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_16
+    { 0x165, 171, 3, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_17
+    { 0x3B, 174, 5, 8, 0, 2 },  // mazda_3_2019:STEER_RATE
+    { 0x18, 179, 4, 8, 0, 2 },  // mazda_3_2019:BRAKE_PEDAL
+    { 0x1A, 183, 4, 8, 0, 2 },  // mazda_3_2019:ENGINE_DATA
+    { 0x91, 187, 5, 8, 0, 2 },  // mazda_3_2019:BLINK_INFO
+    { 0x10, 192, 9, 8, 0, 2 },  // mazda_3_2019:STEER_TORQUE
+    { 0x11, 201, 7, 8, 0, 2 },  // mazda_3_2019:STEER_TORQUE_2
+    { 0x1D, 208, 7, 8, 0, 2 },  // mazda_3_2019:WHEEL
+    { 0x1F, 215, 4, 8, 0, 2 },  // mazda_3_2019:GEAR
+    { 0x60, 219, 12, 8, 0, 2 },  // mazda_3_2019:STEER2
+    { 0x4B9, 231, 8, 8, 0, 2 },  // mazda_3_2019:KEEP_ALIVE_1
+    { 0x25, 239, 4, 8, 0, 2 },  // mazda_3_2019:BLANK_1
+    { 0x2C, 243, 4, 8, 0, 2 },  // mazda_3_2019:BLANK_2
+    { 0x80, 247, 8, 8, 0, 2 },  // mazda_3_2019:RADARS
+    { 0x81, 255, 4, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_19
+    { 0x40A, 259, 4, 8, 0, 2 },  // mazda_3_2019:KEEP_ALIVE_2
+    { 0x4B0, 263, 4, 8, 0, 2 },  // mazda_3_2019:KEEP_ALIVE_3
+    { 0x162, 267, 4, 8, 0, 2 },  // mazda_3_2019:CAM_KEEP_ALIVE_1
+    { 0x150, 271, 5, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_20
+    { 0x156, 276, 8, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_21
+    { 0x108, 284, 3, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_2
+    { 0x16, 287, 4, 8, 0, 2 },  // mazda_3_2019:CRZ_CTRL_BTNS
+    { 0x132, 291, 6, 8, 0, 2 },  // mazda_3_2019:CAM_LANE_3_MAYBE
+    { 0x133, 297, 5, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_1
+    { 0x140, 302, 4, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_4
+    { 0x141, 306, 2, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_11
+    { 0x125, 308, 3, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_12
+    { 0x126, 311, 3, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_13
+    { 0x124, 314, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_18
+    { 0x123, 315, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_22
+    { 0x122, 316, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_23
+    { 0x115, 317, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_24
+    { 0x116, 318, 0, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_25
+    { 0x111, 318, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_26
+    { 0x112, 319, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_27
+    { 0x121, 320, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_28
+    { 0x14, 321, 1, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_29
+    { 0x120, 322, 0, 8, 0, 2 },  // mazda_3_2019:NEW_MSG_30
+    { 0x4AC, 322, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ABG1D50
+    { 0x4BC, 330, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ABG1D51
+    { 0x3B1, 338, 6, 8, 0, 3 },  // toyota_2017_ref_pt:ABG1S01
+    { 0x344, 344, 20, 8, 0, 3 },  // toyota_2017_ref_pt:ACC1F01
+    { 0x4CB, 364, 4, 8, 0, 3 },  // toyota_2017_ref_pt:ACC1N01
+    { 0x343, 368, 15, 8, 0, 3 },  // toyota_2017_ref_pt:ACC1S03
+    { 0x380, 383, 17, 8, 0, 3 },  // toyota_2017_ref_pt:ACN1S01
+    { 0x381, 400, 33, 8, 0, 3 },  // toyota_2017_ref_pt:ACN1S04
+    { 0x3B0, 433, 6, 6, 0, 3 },  // toyota_2017_ref_pt:ACN1S07
+    { 0x4E2, 439, 4, 8, 0, 3 },  // toyota_2017_ref_pt:AFS1N01
+    { 0x391, 443, 8, 8, 0, 3 },  // toyota_2017_ref_pt:AFS1S01
+    { 0x34D, 451, 3, 5, 0, 3 },  // toyota_2017_ref_pt:AFS1S02
+    { 0x414, 454, 3, 8, 0, 3 },  // toyota_2017_ref_pt:AHB1S01
+    { 0x384, 457, 15, 6, 0, 3 },  // toyota_2017_ref_pt:AVN1S01
+    { 0x386, 472, 21, 6, 0, 3 },  // toyota_2017_ref_pt:AVN1S03
+    { 0x38F, 493, 12, 8, 0, 3 },  // toyota_2017_ref_pt:AVN1S07
+    { 0x389, 505, 24, 8, 0, 3 },  // toyota_2017_ref_pt:AVN1S08
+    { 0x3E6, 529, 7, 5, 0, 3 },  // toyota_2017_ref_pt:AVN1S11
+    { 0x3A5, 536, 11, 8, 0, 3 },  // toyota_2017_ref_pt:AVN1S13
+    { 0x3A8, 547, 6, 5, 0, 3 },  // toyota_2017_ref_pt:AVN1S16
+    { 0x3E7, 553, 9, 7, 0, 3 },  // toyota_2017_ref_pt:AVN1S17
+    { 0x3E8, 562, 8, 8, 0, 3 },  // toyota_2017_ref_pt:AVN1S18
+    { 0x3E9, 570, 8, 8, 0, 3 },  // toyota_2017_ref_pt:AVN1S19
+    { 0x434, 578, 10, 8, 0, 3 },  // toyota_2017_ref_pt:AVN1S20
+    { 0x435, 588, 21, 8, 0, 3 },  // toyota_2017_ref_pt:AVN1S21
+    { 0x413, 609, 9, 8, 0, 3 },  // toyota_2017_ref_pt:AVN1S31
+    { 0x40140639, 618, 13, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1F01_14
+    { 0x4016063B, 631, 4, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1F03_16
+    { 0x40100620, 635, 18, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S01_10
+    { 0x40110621, 653, 4, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S02_11
+    { 0x40120622, 657, 17, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S03_12
+    { 0x40190623, 674, 15, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S04_19
+    { 0x40130638, 689, 17, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S05_13
+    { 0x40170630, 706, 5, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S06_17
+    { 0x40180631, 711, 8, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S07_18
+    { 0x401A0624, 719, 11, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S08_1A
+    { 0x401D0627, 730, 4, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S11_1D
+    { 0x4098063C, 734, 9, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S17_98
+    { 0x4099063D, 743, 7, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S18_99
+    { 0x3FC, 750, 3, 8, 0, 3 },  // toyota_2017_ref_pt:BDB1S19
+    { 0x409A063E, 753, 4, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S20_9A
+    { 0x409B063F, 757, 10, 8, 1, 3 },  // toyota_2017_ref_pt:BDB1S21_9B
+    { 0x3ED, 767, 4, 2, 0, 3 },  // toyota_2017_ref_pt:BGM1S01
+    { 0x4D5, 771, 4, 8, 0, 3 },  // toyota_2017_ref_pt:BSR1N01
+    { 0x3F6, 775, 3, 8, 0, 3 },  // toyota_2017_ref_pt:BSR1S01
+    { 0x45A, 778, 1, 8, 0, 3 },  // toyota_2017_ref_pt:CGW1N02
+    { 0x4CC, 779, 4, 8, 0, 3 },  // toyota_2017_ref_pt:CSR1N01
+    { 0x396, 783, 21, 7, 0, 3 },  // toyota_2017_ref_pt:CSR1S01
+    { 0x40D606D1, 804, 1, 8, 1, 3 },  // toyota_2017_ref_pt:DMS1S02_D6
+    { 0x365, 805, 14, 7, 0, 3 },  // toyota_2017_ref_pt:DS11D70
+    { 0x366, 819, 13, 7, 0, 3 },  // toyota_2017_ref_pt:DS11D71
+    { 0x367, 832, 7, 2, 0, 3 },  // toyota_2017_ref_pt:DS11D72
+    { 0x283, 839, 15, 7, 0, 3 },  // toyota_2017_ref_pt:DS11F01
+    { 0x411, 854, 21, 8, 0, 3 },  // toyota_2017_ref_pt:DS12F02
+    { 0x412, 875, 18, 8, 0, 3 },  // toyota_2017_ref_pt:DS12F03
+    { 0x4B7, 893, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ECO1D50
+    { 0x163, 901, 8, 5, 0, 3 },  // toyota_2017_ref_pt:ECO1S01
+    { 0x39A, 909, 14, 8, 0, 3 },  // toyota_2017_ref_pt:ECO1S90
+    { 0x49E, 923, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ECT1D50
+    { 0x49F, 931, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ECT1D51
+    { 0x4B0, 939, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ECT1D52
+    { 0x4B1, 947, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ECT1D53
+    { 0x4B2, 955, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ECT1D54
+    { 0x4B3, 963, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ECT1D55
+    { 0x1D0, 971, 22, 8, 0, 3 },  // toyota_2017_ref_pt:ECT1F03
+    { 0x2D5, 993, 1, 2, 0, 3 },  // toyota_2017_ref_pt:ECT1S10
+    { 0x3BC, 994, 20, 8, 0, 3 },  // toyota_2017_ref_pt:ECT1S92
+    { 0x498, 1014, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D50
+    { 0x499, 1022, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D51
+    { 0x49A, 1030, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D52
+    { 0x49B, 1038, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D53
+    { 0x49C, 1046, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D54
+    { 0x49D, 1054, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D55
+    { 0x4A8, 1062, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D56
+    { 0x4A7, 1070, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D57
+    { 0x4AD, 1078, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D58
+    { 0x4AE, 1086, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D59
+    { 0x4AF, 1094, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1D60
+    { 0x3F9, 1102, 12, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1F03
+    { 0x1C4, 1114, 16, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1F07
+    { 0x72, 1130, 3, 5, 0, 3 },  // toyota_2017_ref_pt:ENG1F43
+    { 0x2C1, 1133, 13, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1S01
+    { 0x3C1, 1146, 2, 3, 0, 3 },  // toyota_2017_ref_pt:ENG1S23
+    { 0x3D3, 1148, 1, 2, 0, 3 },  // toyota_2017_ref_pt:ENG1S28
+    { 0x580, 1149, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1S51
+    { 0x581, 1157, 8, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1S52
+    { 0x582, 1165, 3, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1S54
+    { 0x3BB, 1168, 17, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1S92
+    { 0x399, 1185, 16, 8, 0, 3 },  // toyota_2017_ref_pt:ENG1S95
+    { 0xEE, 1201, 4, 4, 0, 3 },  // toyota_2017_ref_pt:ENG2F01
+    { 0x1D2, 1205, 18, 8, 0, 3 },  // toyota_2017_ref_pt:ENG2F04
+    { 0x1D3, 1223, 13, 8, 0, 3 },  // toyota_2017_ref_pt:ENG2F05
+    { 0x77, 1236, 6, 6, 0, 3 },  // toyota_2017_ref_pt:ENG2F41
+    { 0x78, 1242, 5, 4, 0, 3 },  // toyota_2017_ref_pt:ENG2F42
+    { 0x394, 1247, 1, 1, 0, 3 },  // toyota_2017_ref_pt:EPS1S90
+    { 0x4D3, 1248, 4, 8, 0, 3 },  // toyota_2017_ref_pt:FCM1N01
+    { 0x489, 1252, 13, 8, 0, 3 },  // toyota_2017_ref_pt:FCM1S10
+    { 0x48A, 1265, 14, 8, 0, 3 },  // toyota_2017_ref_pt:FCM1S11
+    { 0x48B, 1279, 9, 8, 0, 3 },  // toyota_2017_ref_pt:FCM1S12
+    { 0x4FF, 1288, 4, 8, 0, 3 },  // toyota_2017_ref_pt:FRD1N01
+    { 0x2E1, 1292, 10, 2, 0, 3 },  // toyota_2017_ref_pt:FWM1S01
+    { 0x40820634, 1302, 6, 8, 1, 3 },  // toyota_2017_ref_pt:IDT1S03_82
+    { 0x40830635, 1308, 3, 8, 1, 3 },  // toyota_2017_ref_pt:IDT1S04_83
+    { 0x4E9, 1311, 4, 8, 0, 3 },  // toyota_2017_ref_pt:KSS1N01
+    { 0x39F, 1315, 1, 1, 0, 3 },  // toyota_2017_ref_pt:KSS1S90
+    { 0x4EF, 1316, 3, 8, 0, 3 },  // toyota_2017_ref_pt:MAV1N01
+    { 0x40200610, 1319, 11, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S01_20
+    { 0x40210611, 1330, 7, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S02_21
+    { 0x40230619, 1337, 6, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S04_23
+    { 0x4024061A, 1343, 6, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S05_24
+    { 0x40270612, 1349, 4, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S08_27
+    { 0x40280613, 1353, 20, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S09_28
+    { 0x40290614, 1373, 6, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S10_29
+    { 0x402A0615, 1379, 7, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S11_2A
+    { 0x402B0616, 1386, 11, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S12_2B
+    { 0x3E0, 1397, 9, 8, 0, 3 },  // toyota_2017_ref_pt:MET1S18
+    { 0x402006F3, 1406, 17, 8, 1, 3 },  // toyota_2017_ref_pt:MET1S22_20
+    { 0x40E406C0, 1423, 8, 8, 1, 3 },  // toyota_2017_ref_pt:PMN1F03_E4
+    { 0x4A9, 1431, 8, 8, 0, 3 },  // toyota_2017_ref_pt:SCS1D50
+    { 0x4CA, 1439, 4, 8, 0, 3 },  // toyota_2017_ref_pt:SCS1N01
+    { 0x2E8, 1443, 2, 8, 0, 3 },  // toyota_2017_ref_pt:SCS1S01
+    { 0x32F, 1445, 3, 5, 0, 3 },  // toyota_2017_ref_pt:SCS1S06
+    { 0x395, 1448, 7, 4, 0, 3 },  // toyota_2017_ref_pt:SCS1S90
+    { 0x25, 1455, 12, 8, 0, 3 },  // toyota_2017_ref_pt:STR1S01
+    { 0x423, 1467, 2, 1, 0, 3 },  // toyota_2017_ref_pt:STR1S02
+    { 0xAA, 1469, 8, 8, 0, 3 },  // toyota_2017_ref_pt:VSC1F01
+    { 0x1AA, 1477, 13, 6, 0, 3 },  // toyota_2017_ref_pt:VSC1F02
+    { 0x226, 1490, 16, 8, 0, 3 },  // toyota_2017_ref_pt:VSC1F06
+    { 0xB4, 1506, 4, 8, 0, 3 },  // toyota_2017_ref_pt:VSC1S03
+    { 0x320, 1510, 23, 8, 0, 3 },  // toyota_2017_ref_pt:VSC1S07
+    { 0x420, 1533, 10, 8, 0, 3 },  // toyota_2017_ref_pt:VSC1S08
+    { 0xBA, 1543, 3, 4, 0, 3 },  // toyota_2017_ref_pt:VSC1S12
+    { 0x232, 1546, 10, 6, 0, 3 },  // toyota_2017_ref_pt:VSC1S14
+    { 0x228, 1556, 3, 4, 0, 3 },  // toyota_2017_ref_pt:VSC1S29
+    { 0x490, 1559, 3, 1, 0, 3 },  // toyota_2017_ref_pt:VSC1S92
+    { 0x3B7, 1562, 18, 8, 0, 3 },  // toyota_2017_ref_pt:VSC1S95
+    { 0x427, 1580, 6, 8, 0, 3 },  // toyota_2017_ref_pt:VSC1S96
+    { 0x221, 1586, 8, 5, 0, 3 },  // toyota_2017_ref_pt:VSC2F05
+    { 0x220, 1594, 10, 4, 0, 3 },  // toyota_2017_ref_pt:VSC2F07
+    { 0x24, 1604, 17, 8, 0, 3 },  // toyota_2017_ref_pt:YGS1S03
+    { 0x40000682, 1621, 7, 8, 1, 3 },  // toyota_2017_ref_pt:YGW1S01_0
+    { 0x40000683, 1628, 4, 8, 1, 3 },  // toyota_2017_ref_pt:YGW1S02_0
+    { 0x40000686, 1632, 5, 8, 1, 3 },  // toyota_2017_ref_pt:YGW1S05_0
 };
 static const uint16_t MSG_N = 218;
 

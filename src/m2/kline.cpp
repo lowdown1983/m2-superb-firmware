@@ -182,9 +182,24 @@ void pushFrame(const uint8_t* buf, uint8_t len)
     qHead = next;
 }
 
+// W-2: fire-and-forget keep-alive for the txsched callback. The 0x3E
+// subfunction is response-suppressed by definition, so the keep-alive
+// must not wait on the (INFERRED) transceiver echo — sendOnly()'s
+// 200 ms echo wait would stall the whole main loop every period.
+// Echo verification stays in sendOnly()/transact() for real traffic.
+void testerPresentFire()
+{
+    if (curInit == Init::NONE) return;
+    uint8_t req[6] = { 0x82, tgtAddr, tstAddr, 0x3E, 0x00, 0x00 };
+    req[5] = checksum(req, 5);
+    flushK();
+    writePaced(req, 6);  // includes Serial1.flush(); best-effort, no echo wait
+    busstat::noteTx(busstat::Bus::KLINE, 6);
+}
+
 void tpFire(uint8_t)  // txsched callback: tester-present keep-alive
 {
-    if (isAcquired) testerPresent();
+    if (isAcquired) testerPresentFire();
 }
 
 // Never run K-line traffic while the J1850 driver owns its block: the two

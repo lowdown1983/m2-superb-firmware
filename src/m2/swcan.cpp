@@ -37,6 +37,11 @@ constexpr uint8_t EFLG_EWARN = 0x04;
 constexpr uint8_t EFLG_RX1OVR = 0x02;
 constexpr uint8_t EFLG_RX0OVR = 0x01;
 
+// CANCTRL bits (MCP2515 datasheet §REGISTER 9-3). ABAT aborts all pending
+// TX buffers — the vendored macchina/MCP2515@0.3.1 exposes no Abort API,
+// so W-5 sets the bit directly (CANCTRL address via MCP2515_defs.h).
+constexpr uint8_t CANCTRL_ABAT = 0x10;
+
 // TH8056 mode pins (pack VERIFIED): M0 = pin 64, M1 = pin 65.
 //   sleep      = M0 LOW,  M1 LOW
 //   high-speed = M0 HIGH, M1 LOW
@@ -309,6 +314,12 @@ void poll()
         dbg::print((uint32_t)tec);
         dbg::println(F("), re-requesting NORMAL"));
         noInterrupts();  // SPI ARBITER
+        // W-5: clear stale error flags and abort any queued TX *before*
+        // re-requesting NORMAL — otherwise a bus-off caused by a flooding
+        // txsched slot would resume transmitting the stale queue the
+        // moment the controller recovers (128x11 recessive bits later).
+        hw.Write(EFLG, 0x00);
+        hw.Write(CANCTRL, (uint8_t)(hw.Read(CANCTRL) | CANCTRL_ABAT));
         hw.Mode(MODE_NORMAL);
         interrupts();
     } else if (eflg & (EFLG_TXWAR | EFLG_RXWAR | EFLG_EWARN)) {

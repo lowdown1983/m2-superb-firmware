@@ -222,21 +222,46 @@ inline void spinUs(unsigned long us)
     while ((unsigned long)(micros() - t0) < us) { /* spin */ }
 }
 
+// C-1: per-section IRQ masking for TX. Driven bus edges need microsecond
+// determinism, so each drive+spin pair runs masked; passive arbitration
+// polls run UNMASKED so CAN/UART ISRs stay live (the sense loops carry
+// tolerance bands — VPW_ARB_TOL etc. — for exactly this reason).
+// Worst-case continuous blackout is now one driven section: VPW SOF
+// (200us) or one VPW active pulse (<=128us); PWM sections are <=48us.
+// The old full-frame mask blacked out ~34ms (starved CAN RX ISRs, Bee
+// UART ring overrun). micros() is IRQ-safe (PENDSTSET readback).
+inline void vpwDriveSpin(bool active, unsigned long us)
+{
+    noInterrupts();
+    vpwDrive(active);
+    spinUs(us);
+    interrupts();
+}
+inline void pwmDriveSpin(bool active, unsigned long us)
+{
+    noInterrupts();
+    pwmDrive(active);
+    spinUs(us);
+    interrupts();
+}
+
 // ---- TX state machine (Phase 8: explicit phases; still blocking
-// bit-bang — timing-critical, interrupts stay off).
+// bit-bang — timing-critical sections masked per C-1, polls unmasked).
 enum class TxPh : uint8_t {
     WAIT_IDLE, SOF, DATA, EOD, IFS, DONE, ARB_LOST, BUS_BUSY
 };
 
 // VPW TX with arbitration. Caller must have detached the RX ISR (we poll
-// the pin directly) and disabled interrupts.
+// the pin directly). Driven sections are IRQ-masked (see vpwDriveSpin);
+// arbitration polls run with interrupts enabled.
 TxPh vpwTransmit(const uint8_t* frame, uint8_t len)
 {
     // WAIT_IDLE via the shared primitive (5 ms timeout, INFERRED).
     if (!waitIdle(5)) return TxPh::BUS_BUSY;
     // SOF: active 200us.
-    vpwDrive(true); spinUs(VPW_TX_SOF);
-    // DATA: passive symbol first (arbitration window), then active.
+    vpwDriveSpin(true, VPW_TX_SOF);
+    // DATA: passive symbol first (arbitration window, unmasked), then the
+    // masked active pulse.
     for (uint8_t bi = 0; bi < len; bi++) {
         uint8_t b = frame[bi];
         for (int8_t bit = 7; bit >= 0; bit--) {
@@ -252,7 +277,7 @@ TxPh vpwTransmit(const uint8_t* frame, uint8_t len)
                 }
             }
             uint16_t activeUs = one ? VPW_TX_SHORT : VPW_TX_LONG;
-            vpwDrive(true); spinUs(activeUs);
+            vpwDriveSpin(true, activeUs);
         }
     }
     // EOD: passive 200us with collision check (matafonoff behavior).
@@ -276,7 +301,7 @@ TxPh pwmTransmit(const uint8_t* frame, uint8_t len)
     // WAIT_IDLE via the shared primitive (5 ms timeout, INFERRED).
     if (!waitIdle(5)) return TxPh::BUS_BUSY;
     // SOF: 48us active.
-    pwmDrive(true); spinUs(PWM_TX_SOF);
+    pwmDriveSpin(true, PWM_TX_SOF);
     // DATA: fixed 24us bit time; active pulse 8us ('1') or 16us ('0').
     for (uint8_t bi = 0; bi < len; bi++) {
         uint8_t b = frame[bi];
@@ -286,10 +311,17 @@ TxPh pwmTransmit(const uint8_t* frame, uint8_t len)
             // Drive our pulse, then release BEFORE sampling: sampling
             // while still driving would read our own transceiver echo
             // (self-sensing bug — caught in Phase 8 self-review).
+            // C-1: the whole drive-spin-release is one masked section —
+            // an ISR between spin end and release would stretch our pulse
+            // and corrupt the arbitration sample below. The sample poll
+            // itself runs unmasked.
+            unsigned long bitT0;
+            noInterrupts();
             pwmDrive(true);
-            unsigned long bitT0 = micros();
+            bitT0 = micros();
             spinUs(onUs);
             pwmDrive(false);
+            interrupts();
             // Arbitration sample: the bus must go passive now that our
             // pulse ended. If it stays active past onUs + tolerance, a
             // longer ('0') pulse from another node dominates -> we lost.
@@ -299,7 +331,7 @@ TxPh pwmTransmit(const uint8_t* frame, uint8_t len)
             while (pwmSense()) {
                 unsigned long el = (unsigned long)(micros() - bitT0);
                 if (el > (unsigned long)(onUs + PWM_ARB_TOL)) { lost = true; break; }
-                if (el > (unsigned long)(PWM_TX_ZERO + 50)) break;  // sanity bound, INFERRED
+                if (el > (unsigned long)(PWM_TX_ZERO + 50)) { lost = true; break; }  // W-4: stuck bus concedes
             }
             if (lost) return TxPh::ARB_LOST;
             // Passive remainder of the fixed 24us bit time.
@@ -307,7 +339,8 @@ TxPh pwmTransmit(const uint8_t* frame, uint8_t len)
             if (el < PWM_BIT_TIME) spinUs(PWM_BIT_TIME - el);
         }
     }
-    // EOD + IFS (INFERRED).
+    // EOD + IFS (INFERRED). Bus is already passive from the last bit's
+    // release; the redundant drive edge needs no mask.
     pwmDrive(false); spinUs(PWM_TX_EOD);
     spinUs(PWM_TX_IFS);
     return TxPh::DONE;
@@ -502,14 +535,15 @@ bool transact(const uint8_t* tx, uint8_t txLen,
     for (uint8_t i = 0; i < txLen; i++) frame[i] = tx[i];
     frame[txLen] = crc8(tx, txLen);
 
-    // Bit-bang with interrupts off (timing-critical), RX ISR detached so
-    // our own transmission isn't captured; arbitration is polled.
+    // Bit-bang with per-section IRQ masking (C-1): driven edges run masked
+    // for microsecond determinism, arbitration polls run unmasked so CAN
+    // RX and Bee UART ISRs stay live. Worst-case continuous blackout is
+    // one driven section (VPW SOF 200us) — never the ~34ms full frame the
+    // old global mask held. RX ISR detached so our own TX isn't captured.
     detachInterrupt(digitalPinToInterrupt(rxPin));
-    noInterrupts();
     TxPh res;
     if (curProto == Proto::VPW) res = vpwTransmit(frame, (uint8_t)(txLen + 1));
     else res = pwmTransmit(frame, (uint8_t)(txLen + 1));
-    interrupts();
     ist.lastEdge = micros(); ist.st = RxSt::IDLE;
     attachInterrupt(digitalPinToInterrupt(rxPin), rxIsr, CHANGE);
     if (res == TxPh::ARB_LOST) {

@@ -10,7 +10,7 @@ NO DBC text parsing happens in firmware (too heavy for the SAM3X8E) —
 all parsing is done here, at build time.
 
 What is emitted:
-  - dbc::MSG[] : one row per CAN message {id, ext, dlc, nSig, sigBase}
+  - dbc::MSG[] : one row per CAN message {id, sigBase, nSig, dlc, ext, dbc}
   - dbc::SIG[] : one row per signal {name[16], startBit, len, flags,
                  factor1000 (int32), offset1000 (int32), msgIdx,
                  muxVal}. Physical value = raw * factor1000/1000 +
@@ -301,6 +301,8 @@ def main():
         f.write("    uint16_t nSig;\n")
         f.write("    uint8_t dlc;\n")
         f.write("    uint8_t ext;\n")
+        f.write("    uint8_t dbc;   // F-03: index into DBC_NAMES[];\n")
+        f.write("                   // disambiguates duplicate CAN IDs\n")
         f.write("};\n\n")
         f.write("struct EnumVal {\n")
         f.write("    uint16_t sigIdx;\n")
@@ -309,10 +311,15 @@ def main():
         f.write("};\n\n")
         f.write("static const Msg MSG[] = {\n")
         base = 0
+        # F-03: numeric DBC index per message (name -> position in the
+        # baked DBC order, matching DBC_NAMES[] below).
+        dbc_index = {}
+        for _di, (_dn, _dm, _ds) in enumerate(baked):
+            dbc_index[_dn] = _di
         for mi, mm in enumerate(all_msgs):
-            f.write("    { 0x%X, %d, %d, %d, %d },  // %s:%s\n" %
+            f.write("    { 0x%X, %d, %d, %d, %d, %d },  // %s:%s\n" %
                     (mm["id"], base, len(mm["sigs"]), mm["dlc"], mm["ext"],
-                     mm["dbc"], mm["name"]))
+                     dbc_index[mm["dbc"]], mm["dbc"], mm["name"]))
             base += len(mm["sigs"])
         f.write("};\n")
         f.write("static const uint16_t MSG_N = %d;\n\n" % len(all_msgs))

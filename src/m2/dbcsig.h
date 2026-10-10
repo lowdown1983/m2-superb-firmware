@@ -41,10 +41,19 @@ struct SignalVal {
     const char* en;       // enum description, or nullptr
 };
 
+// F-03: active DBC profile for duplicate-ID disambiguation. Five CAN IDs
+// occur in more than one embedded DBC; without a profile, decode() takes
+// the first table entry and a shadowed vehicle's frames decode under the
+// wrong layout. -1 (default) = legacy first-match across all DBCs;
+// 0..dbcCount()-1 = scope ID lookup to that DBC's messages only.
+void selectDbc(int8_t idx);
+int8_t selectedDbc();
+
 // Decode all signals of one CAN frame. Calls cb once per decoded
 // signal (multiplexed signals only when their muxVal matches the
 // multiplexer's current value). Returns the number of signals decoded.
-// id matching: exact 11/29-bit match against the baked table.
+// id matching: exact 11/29-bit match against the baked table, scoped to
+// the selected DBC when one is active (see selectDbc()).
 // Signals whose bit span exceeds the frame length are skipped (fail
 // closed); see truncatedSkips().
 uint16_t decode(uint32_t id, bool ext, const uint8_t* data, uint8_t len,

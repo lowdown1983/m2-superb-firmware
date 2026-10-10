@@ -2,10 +2,13 @@
 
 #include "dbcsig.h"
 #include "debug.h"
+#include <stdint.h>
 #include <string.h>
 
 namespace dbcsig {
 namespace {
+
+int8_t activeDbc = -1;  // F-03: -1 = all DBCs (legacy first-match)
 
 // Highest byte index a signal's bit span touches. Used for the
 // fail-closed truncated-frame check: a signal whose span reaches past
@@ -68,6 +71,9 @@ uint32_t extractRaw(const dbc::Sig& s, const uint8_t* data, uint8_t dlen)
 int msgIndexById(uint32_t id, bool ext)
 {
     for (uint16_t i = 0; i < dbc::MSG_N; i++) {
+        // F-03: when a DBC profile is selected, shadowed duplicate IDs
+        // from other DBCs are invisible to the lookup.
+        if (activeDbc >= 0 && dbc::MSG[i].dbc != (uint8_t)activeDbc) continue;
         if (dbc::MSG[i].id == id && (bool)dbc::MSG[i].ext == ext)
             return (int)i;
     }
@@ -84,6 +90,16 @@ const char* enumFor(uint16_t sigIdx, int32_t raw)
 }
 
 } // namespace (anonymous)
+
+// F-03: public DBC-profile selector (declared in dbcsig.h). Lives outside
+// the anonymous namespace; msgIndexById() above reads activeDbc.
+void selectDbc(int8_t idx)
+{
+    if (idx < -1 || idx >= (int8_t)dbc::DBC_N) return;  // ignore nonsense
+    activeDbc = idx;
+}
+
+int8_t selectedDbc() { return activeDbc; }
 
 uint16_t decode(uint32_t id, bool ext, const uint8_t* data, uint8_t len,
                 void (*cb)(const SignalVal& v, void* ctx), void* ctx)
@@ -123,9 +139,16 @@ uint16_t decode(uint32_t id, bool ext, const uint8_t* data, uint8_t len,
         // produce plausible-but-wrong telemetry).
         if (spanMaxByte(s) >= len) { truncSkips++; continue; }
         uint32_t raw = extractRaw(s, data, len);
-        // phys1000 = raw * factor1000/1000 + offset1000/1000, integer math.
-        int64_t phys1000 = (int64_t)(int32_t)raw * (int64_t)s.factor1000 / 1000
-                         + (int64_t)s.offset1000 / 1000;
+        // F-02: phys1000 is physical value * 1000 (milli-units), matching
+        // the SignalVal contract and the fixed-point formatter. The old
+        // formula divided back down to plain physical units (1000x too
+        // small, fractional precision destroyed). Saturate on narrowing:
+        // a pathological factor could exceed int32 milli-units.
+        int64_t p1000 = (int64_t)(int32_t)raw * (int64_t)s.factor1000
+                      + (int64_t)s.offset1000;
+        if (p1000 > INT32_MAX) p1000 = INT32_MAX;
+        else if (p1000 < INT32_MIN) p1000 = INT32_MIN;
+        int64_t phys1000 = p1000;
         if (cb) {
             SignalVal v;
             v.name = s.name;

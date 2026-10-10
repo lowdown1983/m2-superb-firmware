@@ -281,7 +281,12 @@ uint8_t requestMulti(const Endpoint& ep,
 
     // ---- RX: reassemble, keyed by sender ID (functional addressing can
     // interleave several ECUs' FF/CF streams) ----
-    Reasm r[MAX_REASM] = {};
+    // O-1: ~1 KB table lives in static storage, not on the 8 KB-class
+    // stack. Single-threaded by firmware contract: no reentrant caller
+    // (mode_uds/mode_obd2 console paths only), so a function-static with
+    // an explicit reset each call is safe.
+    static Reasm r[MAX_REASM];
+    memset(r, 0, sizeof(r));
     uint8_t nResp = 0;
     uint32_t start = millis();
     uint32_t lastActivity = start;
