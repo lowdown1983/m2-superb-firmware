@@ -11,3 +11,6 @@ __pycache__/
 # OS noise
 .DS_Store
 Thumbs.db
+
+# Sim runtime artifacts
+sim/traffic.log
