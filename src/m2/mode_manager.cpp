@@ -858,7 +858,7 @@ void ModeManager::enterGateway()
     // Acquire BEFORE enable (ownership rule): CAN0 at the staged baud +
     // SWCAN at the staged speed, via the mode's own begin(). UART0/Bee
     // was begun in setup() and is never released. quiesceBuses() already
-    // handles both native CAN (begun flags) and the TH8056 (sleepGpio).
+    // handles both native CAN (begun flags) and SWCAN (swcan::release()).
     gateway::begin();
 }
 

@@ -203,21 +203,6 @@ bool setMode(Mode m)
     return true;
 }
 
-void sleepGpio()
-{
-    // Pure GPIO: M0 LOW, M1 LOW = TH8056 sleep (weak pulldowns agree).
-    // Safe before/after any MCP2515 init — the quiesceBuses() path.
-    driveModePins(Mode::SLEEP);
-    detachInterrupt(SWC_INT);
-    curMode = Mode::SLEEP;
-    // Audit fix M-1 (2026-10-08): this parks the transceiver and detaches
-    // the ISR — that IS a release of the block. The flag must clear, or a
-    // later acquire() (e.g. auto-detect's SWCAN stage after quiesceBuses())
-    // returns false on a stale claim and the stage is silently skipped.
-    // Restore is via the normal enter path (swcanEnter -> acquire()).
-    isAcquired = false;
-}
-
 bool reconfigure(uint32_t speed)
 {
     if (!isAcquired) { curSpeed = speed; return true; }  // staged for later

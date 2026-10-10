@@ -37,11 +37,15 @@ bool isKnownId(uint32_t id, bool ext)
 uint32_t canListen(uint32_t baud, bool ext, uint32_t& knownHits)
 {
     // INV-SILENT (F-2): transceiver-level silence for the whole sweep step.
+    // Ownership: if another mode (e.g. M2RET's silent monitor) already
+    // holds the S pin HIGH, we add no new claim and — critically — clear
+    // nothing on exit. Only exit what we raised.
     // Asserted BEFORE begin(): even the brief normal-mode window between
     // begin() and setListenOnlyMode(true) cannot ACK with S held HIGH.
-    silentpins::enter(0);
+    bool weRaised = !silentpins::held(0);
+    if (weRaised) silentpins::enter(0);
     // Pin-safety: 255 = no transceiver-enable pin driving (invariant).
-    if (!Can0.begin(baud, 255)) { silentpins::exit(0); return 0; }
+    if (!Can0.begin(baud, 255)) { if (weRaised) silentpins::exit(0); return 0; }
     Can0.setListenOnlyMode(true);  // due_can 2.1.6: silent monitoring
     for (int f = 0; f < 7; f++) Can0.setRXFilter(f, 0, 0, ext);
     uint32_t t0 = millis();
@@ -59,7 +63,8 @@ uint32_t canListen(uint32_t baud, bool ext, uint32_t& knownHits)
     }
     Can0.setListenOnlyMode(false);
     Can0.disable();  // pin-safe: begun with 255 above
-    silentpins::exit(0);  // INV-SILENT: restore S pin on every exit path
+    // INV-SILENT ownership: never clear another owner's silence.
+    if (weRaised) silentpins::exit(0);
     return frames;
 }
 

@@ -82,12 +82,29 @@ independently reviewed)
   `src/m2/mode_m2ret.cpp`, `src/m2/mode_manager.cpp`).
 - Auditor question 1 resolved (card bug, not firmware): the auditor hardware
   card listed CAN pins as 62/63/68/69; the knowledge pack (VERIFIED from
-  schematic + variant files) and the Bolt vehicle run agree on
-  CANRX0=69/CANTX0=70/CANRX1=72/CANTX1=73 with silent pins 71/74. Card row
-  corrected (`auditor-brief/AUDITOR_HARDWARE_CARD.md`).
+  schematic + variant files) gives CANRX0=69/CANTX0=70/CANRX1=72/CANTX1=73
+  with silent pins 71/74. The Bolt vehicle run (Torque over Can0)
+  VEHICLE-VALIDATES 69/70; CAN1's 72/73 remain VERIFIED from schematic +
+  variant, not vehicle-tested. Card row corrected
+  (`auditor-brief/AUDITOR_HARDWARE_CARD.md`).
 - Still open (unchanged): F-07 log-access policy (`/logs`, `/log_dl` have
   no role check) and the raw `0x34/0x36/0x37` console path — both are
   Marcus's policy calls, not decided.
+
+### Fixed (2026-10-10 — adversarial review of the same-day audit batch)
+- Reviewer-found regression in this batch's Finding-1 fix: `canListen()`
+  unconditionally drove the S pin LOW on exit, clearing transceiver silence
+  owned by another mode (M2RET's silent monitor holds pin 71 HIGH across the
+  quiesce → auto-detect → reacquire round trip, and `enterM2RET()` re-begins
+  the controller in normal mode without restoring listen-only from its
+  flag). `silent_pins.h` now tracks ownership (`held()`); `canListen()`
+  only exits what it raised (`src/m2/silent_pins.h`, `src/m2/autodet.cpp`).
+- Removed dead `swcan::sleepGpio()` (zero callers since `swcanSleep()` was
+  rerouted through `release()`) and its stale comments (`src/m2/swcan.cpp`,
+  `src/m2/swcan.h`, `src/m2/mode_manager.cpp`).
+- Known wart, not fixed (out of scope): `quiesceBuses()` still doesn't
+  establish S-pin state when leaving a mode, so a HIGH S pin can ride into
+  the next mode.
 
 ### Fixed (2026-10-10 — 2026-10-09 firmware audit findings F-02/F-03 + hardening
 fixes, applied on Marcus's approval)

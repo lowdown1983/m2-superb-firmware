@@ -32,8 +32,8 @@
 // INV-SPI0 — NPCS3; no other SPI0 client exists in firmware), the PIOC16
 // callback slot (single slot per pack — the ISR trampoline), SWC_M0/SWC_M1
 // GPIOs. acquire/release discipline; release() is idempotent (safe for
-// quiesceBuses). sleepGpio() is GPIO-only and safe before/after any
-// MCP2515 init.
+// quiesceBuses) and degrades to GPIO-only when the MCP2515 was never
+// initialized.
 //
 // EVERYTHING hardware-touching is INFERRED until tested on a SWCAN vehicle
 // (the 2023 Bolt EV is CAN-only; no GM-LAN here).
@@ -66,13 +66,6 @@ uint32_t speed();
 // ->SLEEP waits 100 ms (the VERIFIED Standby->Sleep minimum from TH8056
 // §2.5; the exact Normal->Sleep mapping is INFERRED).
 bool setMode(Mode m);
-
-// GPIO-only sleep: drives M0/M1 LOW without touching SPI and without the
-// settle wait. Safe before or after any MCP2515 init (the quiesceBuses()
-// path). No consumer depends on sleep completion — the next acquire()
-// carries the Sleep->Normal settle — so the immediate return keeps mode
-// switches fast. (Full release() does settle.)
-void sleepGpio();
 
 // Re-run init at a new speed while acquired (release + acquire). Used for
 // live speed changes.
