@@ -9,6 +9,12 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Added (2026-10-10 — pre-commit gate made clone-safe)
+- Tracked hook copy `scripts/hooks/pre-commit` + installer
+  `scripts/install-git-hooks.sh` (re-run after a fresh clone; the previous
+  `.git/hooks/pre-commit` is now a symlink to the tracked copy, verified
+  byte-identical). Fresh clones no longer lose the sim gate silently.
+
 ### Changed (2026-10-10 — raw UDS 0x34/0x36/0x37 policy, Marcus's decision)
 - Raw 0x34/0x36/0x37 (RequestDownload/TransferData/RequestTransferExit)
   are now refused on both raw paths: the USB console (`uds 34 ...` in

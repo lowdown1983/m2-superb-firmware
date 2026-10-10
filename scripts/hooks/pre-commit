@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Local pre-commit gate: delegates to sim/ci.sh (the same gate CI runs).
+# Runs only when sim-related files are staged. Bypass with: git commit --no-verify
+set -u
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Only gate when the commit touches the sim, its tests, or the CI gate itself.
+if ! git diff --cached --name-only -z | grep -zEq '^(sim/|src/sim_shim/|pytest\.ini|\.github/workflows/sim-ci\.yml)'; then
+  echo "[pre-commit] no sim files staged — sim gate skipped"
+  exit 0
+fi
+
+export PATH="$HOME/.pio-venv/bin:$PATH"
+if [[ ! -x "$REPO_ROOT/sim/ci.sh" ]]; then
+  echo "[pre-commit] WARNING: sim/ci.sh missing — sim gate skipped (run the suite manually)"
+  exit 0
+fi
+
+echo "[pre-commit] running sim CI gate (sim/ci.sh)..."
+if ! "$REPO_ROOT/sim/ci.sh" > /tmp/sim-gate.log 2>&1; then
+  echo "[pre-commit] SIM GATE FAILED — see /tmp/sim-gate.log"
+  tail -30 /tmp/sim-gate.log
+  exit 1
+fi
+
+echo "[pre-commit] sim gate passed"
+exit 0
