@@ -9,6 +9,30 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Added (2026-10-10 — sim Step 3: Bee-link fault injection; Grok-built,
+independently reviewed)
+- `sim/broker.py` gains a fault-control console on `127.0.0.1:14003` (text,
+  one command per line; localhost-only, no auth): `none | status | drop
+  A|B|both <0-100> | corrupt A|B|both <0-100> | dropn A|B <n> | help`.
+- Faults apply per recv *chunk* on the named source side before forward —
+  `drop A 100` kills A→B (M2→SuperB). Default policy is transparent so the
+  existing smoke tests stay green.
+- Tests: `sim/tests/test_bee_fault.py` (5 cases): full `drop both 100`
+  drives SuperB `/api/status` to `m2_ok:false`; `none` recovers
+  `m2_ok:true` without restarting either sim; `dropn` and `corrupt` paths
+  exercised with recovery. Full suite: 22 passed.
+- Scope: Python broker + tests + docs only — no `src/m2/`, `src/superb/`,
+  or `src/sim_shim/` changes. Docs: `docs/SIM.md` fault-injection
+  section; port 14003 added to the ports table.
+- Evidence: drop→`m2_ok:false` and `none`-recovery **VERIFIED** in pytest;
+  proves host byte-pipe loss/recovery only — does NOT model silicon UART
+  framing or electrical noise.
+- Review notes: direction is source-side (consistent between the handler
+  and the docstring); `dropn` is per-side only (`both` rejected with a
+  usage error, which is fine). Fault granularity is chunk- (recv buffer-)
+  sized, timing-dependent — coarse by design, documented in the broker
+  docstring.
+
 ### Fixed (2026-10-10 — 2026-10-09 firmware audit findings F-02/F-03 + hardening
 fixes, applied on Marcus's approval)
 - F-02 (Major): DBC physical-value scaling was wrong by a factor of 1000 —

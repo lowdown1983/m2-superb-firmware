@@ -54,6 +54,7 @@ link between them is a byte pipe through a small Python broker.
 |---|---|---|
 | 14001 | Broker side A — sim_m2 Bee `Serial` | override: `SIM_BEE_PORT` (M2) |
 | 14002 | Broker side B — sim_superb Bee `Serial` | override: `SIM_BEE_PORT` (SuperB) |
+| 14003 | Broker fault-control console | text commands: drop/corrupt/none |
 | 18080 | SuperB web GUI | firmware's port 80 (80 needs root) |
 | 14023 | SuperB TCP:23 bridge | firmware's port 23 (23 needs root) |
 | 14024 | BT SPP shim | "BT SPP is TCP in sim" — connect any TCP client |
@@ -204,13 +205,28 @@ vehicle show
 Ramp advances one step each time that OBD PID is read. Encoding:
 rpm×4, coolant+40, throttle%→0..255. `src/sim_shim` only.
 
+## Fault injection (Step 3 — 2026-10-10)
+
+Broker control port `127.0.0.1:14003` (one line per command):
+
+```
+none
+status
+drop   A|B|both <0-100>
+corrupt A|B|both <0-100>
+dropn  A|B <n>
+help
+```
+
+`drop both 100` makes SuperB report `m2_ok:false`; `none` recovers without
+restarting the sims. Tests: `sim/tests/test_bee_fault.py`.
+
 ## Roadmap (deferred)
 
 - **Scripted vehicle depth:** more UDS services (0x14 clear DTC, 0x2E
   write), Mode 09 OBD multi-frame, periodic broadcast frames,
   python-driven scenario scripts.
-- **Fault injection:** drop/corrupt Bee bytes via the broker to test the
-  control channel's resync and timeout paths.
+- **Fault injection:** done (broker :14003); deeper protocol-level mutators optional.
 - **J1850 timing sim:** virtual microsecond-accurate GPIO for the PWM/VPW
   driver (still INFERRED vs. silicon, but exercises the bit logic).
 - **CI:** run the smoke + vehicle tests on every commit before hardware flash.
