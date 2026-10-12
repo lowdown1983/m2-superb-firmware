@@ -5,9 +5,6 @@
 #include <string.h>
 #include <ctype.h>
 
-// Sim bus instances live in SimCAN_globals.cpp at global scope.
-extern CANRaw Can1;
-
 namespace vehicle_ecu {
 namespace {
 
@@ -105,18 +102,23 @@ uint8_t throttleByte()
     return (uint8_t)((g_throttle_pct * 255) / 100);
 }
 
-// Pending multi-frame TX
+// Pending multi-frame TX (ISO 15765-2 responder side).
+// BS=0 → send all remaining CFs after one CTS FC (ISO default).
+// BS=N → send at most N CFs, then wait for the next FC.
+// STmin is parsed and stored but treated as 0 (no PHY timing in sim).
+// FS≠CTS (Wait=1, Overflow=2) aborts the transfer.
+// Single outstanding transfer only; a new SF request mid-transfer is a
+// known stale-g_mf gap (out of scope for this change).
 struct MfPending {
     bool active;
     CANRaw* bus;
-    uint32_t id;
+    uint32_t id;       // response CAN ID (7E8 / 18DAF110)
     bool ext;
     uint8_t data[64];
     uint16_t len;
     uint16_t sent;
     uint8_t sn;
-    uint8_t bs_remaining;  // last FC's Block Size (0 = send all remaining)
-    uint8_t stmin;         // last FC's STmin, recorded; treated as 0 in host sim
+    uint8_t stmin;     // last FC STmin byte (recorded, not enforced)
 };
 MfPending g_mf = {};
 
@@ -159,7 +161,6 @@ void startMulti(CANRaw* bus, uint32_t id, bool ext,
     g_mf.id = id;
     g_mf.ext = ext;
     g_mf.sn = 1;
-    g_mf.bs_remaining = 0;
     g_mf.stmin = 0;
     g_mf.active = true;
 
@@ -172,39 +173,45 @@ void startMulti(CANRaw* bus, uint32_t id, bool ext,
     injectRaw(bus, id, ext, ff);
 }
 
-// Emit up to `budget` consecutive frames (budget == 0 → all remaining,
-// per ISO 15765-2 Block Size semantics). STmin is intentionally not delayed:
-// the host sim has no meaningful microsecond clock for inter-CF gaps, so
-// STmin is parsed and stored but treated as 0 (documented limitation).
-void emitCfBlock(uint8_t budget)
+// Emit up to `budget` consecutive frames (budget==0 → unlimited for this block).
+// Returns true if the transfer is fully complete.
+bool emitCfBlock(uint8_t budget)
 {
-    uint8_t n = budget;
-    while (g_mf.sent < g_mf.len && (budget == 0 || n > 0)) {
+    uint8_t emitted = 0;
+    while (g_mf.sent < g_mf.len) {
+        if (budget != 0 && emitted >= budget) return false;
         uint8_t cf[8];
         memset(cf, 0, 8);
         cf[0] = 0x20 | (g_mf.sn & 0x0F);
-        uint8_t cnt = (uint8_t)((g_mf.len - g_mf.sent > 7)
-                                   ? 7 : (g_mf.len - g_mf.sent));
-        memcpy(cf + 1, g_mf.data + g_mf.sent, cnt);
+        uint8_t n = (uint8_t)((g_mf.len - g_mf.sent > 7)
+                                  ? 7 : (g_mf.len - g_mf.sent));
+        memcpy(cf + 1, g_mf.data + g_mf.sent, n);
         injectRaw(g_mf.bus, g_mf.id, g_mf.ext, cf);
-        g_mf.sent = (uint16_t)(g_mf.sent + cnt);
+        g_mf.sent = (uint16_t)(g_mf.sent + n);
         g_mf.sn = (uint8_t)((g_mf.sn + 1) & 0x0F);
-        if (budget != 0) n--;
+        emitted++;
     }
-    if (g_mf.sent >= g_mf.len) g_mf.active = false;
+    g_mf.active = false;
+    return true;
 }
 
 void continueMultiOnFc(CANRaw* bus, const CAN_FRAME& tx)
 {
     if (!g_mf.active || bus != g_mf.bus) return;
-    if (tx.length < 1 || (tx.data.bytes[0] & 0xF0) != 0x30) return;
-    // Flow Status: 0 = ContinueToSend; 1 = Wait, 2 = Overflow → abort the
-    // transfer cleanly, no further CFs (ISO 15765-2).
-    if ((tx.data.bytes[0] & 0x0F) != 0) { g_mf.active = false; return; }
-    if (tx.length < 3) return;  // malformed FC: BS + STmin bytes required
-    uint8_t bs = tx.data.bytes[1];
-    g_mf.stmin = tx.data.bytes[2];  // recorded; treated as 0 (see above)
-    g_mf.bs_remaining = bs;
+    if ((tx.data.bytes[0] & 0xF0) != 0x30) return;
+
+    const uint8_t fs = (uint8_t)(tx.data.bytes[0] & 0x0F);
+    if (fs == 1 || fs == 2) {
+        // Wait or Overflow: abort; do not emit further CFs.
+        g_mf.active = false;
+        return;
+    }
+    if (fs != 0) return;  // unknown FS — ignore
+
+    const uint8_t bs = tx.data.bytes[1];
+    g_mf.stmin = tx.data.bytes[2];  // recorded only; STmin enforced as 0 in sim
+
+    // BS=0 → send all remaining; BS=N → at most N CFs then wait for next FC.
     emitCfBlock(bs);
 }
 
@@ -214,24 +221,28 @@ uint8_t buildMode01(uint8_t pid, uint8_t* out, uint8_t outMax)
     out[0] = 0x41;
     out[1] = pid;
     switch (pid) {
-    case 0x00:
+    case 0x00: {
+        // ISO 15031 / SAE J1979: PID 0x00 bitfield covers PIDs 0x01–0x20.
+        // Bit for PID n = byte[(n-1)/8] bit[7-((n-1)%8)].
+        // Implemented in this range: 05,0B,0C,0D,0F,11,1C.
+        // Also set PID 0x20 so clients know to query 0120 (we implement 0x2F).
         if (outMax < 6) return 0;
-        // Claim exactly the PIDs implemented in the 01-20 group:
-        // byte layout per ISO 15031: support bit for PID n is bit
-        // (7-((n-1)%8)) of byte ((n-1)/8).
-        // PID05: n-1=4,  byte0 bit3 -> 0x08
-        // PID0B: n-1=10, byte1 bit5 -> 0x20
-        // PID0C: n-1=11, byte1 bit4 -> 0x10
-        // PID0D: n-1=12, byte1 bit3 -> 0x08
-        // PID0F: n-1=14, byte1 bit1 -> 0x02
-        // PID11: n-1=16, byte2 bit7 -> 0x80
-        // (PID 1C=28 and 2F=47 live in higher groups, discovered via
-        // 0120/0140 — correctly absent here.)
-        out[2] = 0x08;
-        out[3] = 0x3A;
-        out[4] = 0x80;
-        out[5] = 0x00;
+        out[2] = 0x08; // 05
+        out[3] = 0x3A; // 0B,0C,0D,0F
+        out[4] = 0x80; // 11
+        out[5] = 0x11; // 1C (bit4) + 20 (bit0, next-range pointer)
         return 6;
+    }
+    case 0x20: {
+        // PIDs 0x21–0x40. Implemented: 0x2F only.
+        // offset from 0x21: 0x2F-0x21=14 → byte1 bit1 → 0x02
+        if (outMax < 6) return 0;
+        out[2] = 0x00;
+        out[3] = 0x02; // 2F
+        out[4] = 0x00;
+        out[5] = 0x00; // no 0x40 pointer (nothing in 41–60)
+        return 6;
+    }
     case 0x05:
         advanceOnRead(Sig::COOLANT);
         if (outMax < 3) return 0;
@@ -410,6 +421,114 @@ bool handleConsoleLine(const char* line,
     if (!line || !reply) return false;
     // Skip leading spaces
     while (*line == ' ' || *line == '\t') line++;
+
+    // ---- can inject|tx|rx ----
+    // inject: RX queue only (no vehicle_ecu). tx: sendFrame → onTx.
+    // rx: drain/print RX queue (vehicle_ecu responses land here).
+    if (strncasecmp(line, "can", 3) == 0 &&
+        (line[3] == '\0' || line[3] == ' ' || line[3] == '\t')) {
+        const char* p = line + 3;
+        while (*p == ' ' || *p == '\t') p++;
+        char buf[160];
+        strncpy(buf, p, sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        char* args[6] = {};
+        int nargs = 0;
+        char* save = nullptr;
+        for (char* t = strtok_r(buf, " \t", &save); t && nargs < 6;
+             t = strtok_r(nullptr, " \t", &save)) {
+            args[nargs++] = t;
+        }
+        if (nargs == 0 || !strcasecmp(args[0], "help")) {
+            reply("can inject <0|1> <idHex> <dataHex>  # RX only", ctx);
+            reply("can tx <0|1> <idHex> <dataHex>      # sendFrame → vehicle_ecu", ctx);
+            reply("can rx <0|1>                        # drain/print RX queue", ctx);
+            return true;
+        }
+
+        if ((!strcasecmp(args[0], "inject") || !strcasecmp(args[0], "tx"))
+            && nargs >= 4) {
+            const bool isTx = !strcasecmp(args[0], "tx");
+            int bus = atoi(args[1]);
+            if (bus != 0 && bus != 1) {
+                reply("ERR bus must be 0 or 1", ctx);
+                return true;
+            }
+            char* end = nullptr;
+            unsigned long id = strtoul(args[2], &end, 16);
+            if (end == args[2] || *end != '\0' || id > 0x1FFFFFFFul) {
+                reply("ERR bad id hex", ctx);
+                return true;
+            }
+            const char* hex = args[3];
+            size_t hlen = strlen(hex);
+            if (hlen == 0 || (hlen % 2) != 0 || hlen > 16) {
+                reply("ERR dataHex even length 2..16", ctx);
+                return true;
+            }
+            CAN_FRAME f;
+            f.id = (uint32_t)id;
+            f.extended = (id > 0x7FFul) ? 1 : 0;
+            f.rtr = 0;
+            f.length = (uint8_t)(hlen / 2);
+            memset(f.data.bytes, 0, 8);
+            for (uint8_t i = 0; i < f.length; i++) {
+                char b2[3] = { hex[i * 2], hex[i * 2 + 1], 0 };
+                f.data.bytes[i] = (uint8_t)strtoul(b2, nullptr, 16);
+            }
+            CANRaw* busp = (bus == 0) ? &Can0 : &Can1;
+            if (isTx) {
+                if (!busp->begun()) busp->begin(500000);
+                if (!busp->sendFrame(f)) {
+                    reply("ERR sendFrame failed", ctx);
+                    return true;
+                }
+            } else {
+                busp->injectFrame(f);
+            }
+            char msg[72];
+            snprintf(msg, sizeof(msg), "OK %s bus=%d id=0x%lX len=%u",
+                     isTx ? "tx" : "inject", bus, id, (unsigned)f.length);
+            reply(msg, ctx);
+            return true;
+        }
+
+        if (!strcasecmp(args[0], "rx") && nargs >= 2) {
+            int bus = atoi(args[1]);
+            if (bus != 0 && bus != 1) {
+                reply("ERR bus must be 0 or 1", ctx);
+                return true;
+            }
+            CANRaw* busp = (bus == 0) ? &Can0 : &Can1;
+            uint16_t n = busp->available();
+            if (n == 0) {
+                reply("OK rx empty", ctx);
+                return true;
+            }
+            char hdr[40];
+            snprintf(hdr, sizeof(hdr), "OK rx bus=%d count=%u", bus, (unsigned)n);
+            reply(hdr, ctx);
+            for (uint16_t i = 0; i < n && i < 32; i++) {
+                CAN_FRAME f;
+                if (!busp->read(f)) break;
+                char linebuf[96];
+                int pos = snprintf(linebuf, sizeof(linebuf), "  %s%lX#",
+                                   f.extended ? "ext:" : "",
+                                   (unsigned long)f.id);
+                for (uint8_t b = 0; b < f.length && pos < (int)sizeof(linebuf) - 3;
+                     b++) {
+                    pos += snprintf(linebuf + pos, sizeof(linebuf) - (size_t)pos,
+                                    "%02X", f.data.bytes[b]);
+                }
+                reply(linebuf, ctx);
+            }
+            return true;
+        }
+
+        reply("ERR can inject|tx|rx ... (can help)", ctx);
+        return true;
+    }
+
     if (strncasecmp(line, "vehicle", 7) != 0) return false;
     const char* p = line + 7;
     if (*p != '\0' && *p != ' ' && *p != '\t') return false;
@@ -427,12 +546,11 @@ bool handleConsoleLine(const char* line,
         args[nargs++] = t;
     }
 
-    if (!strcasecmp(args[0], "help")) {
+    if (nargs == 0 || !strcasecmp(args[0], "help")) {
         reply("vehicle set  rpm|speed|coolant|throttle <value>", ctx);
         reply("vehicle ramp rpm|speed|coolant|throttle <from> <to> <steps>", ctx);
         reply("vehicle show", ctx);
-        reply("vehicle tx   <idhex> <datahex>  (test-only raw frame to scripted ECU)", ctx);
-        reply("vehicle mf   (multi-frame TX state)", ctx);
+        reply("can inject|tx <0|1> <idHex> <dataHex> | can rx <0|1>", ctx);
         return true;
     }
 
@@ -520,48 +638,6 @@ bool handleConsoleLine(const char* line,
         return true;
     }
 
-    // Test-only raw frame injection, straight to the scripted ECU.
-    // Lets pytest drive SF/FC sequences (BS=1, FS abort, 29-bit FC) without
-    // the M2 ISO-TP client racing its own FC. Delivered via onTx(&Can1, ...)
-    // so responses land in Can1's RX queue, keeping Can0 pristine.
-    if (!strcasecmp(args[0], "tx") && nargs >= 3) {
-        char* end = nullptr;
-        unsigned long id = strtoul(args[1], &end, 16);
-        size_t dl = strlen(args[2]);
-        bool ok = (end != args[1] && *end == '\0' && id <= 0x1FFFFFFFul &&
-                   dl > 0 && dl <= 16 && (dl & 1) == 0);
-        uint8_t d[8] = {};
-        for (size_t i = 0; ok && i < dl / 2; i++) {
-            char byte[3] = { args[2][2 * i], args[2][2 * i + 1], '\0' };
-            char* e2 = nullptr;
-            unsigned long v = strtoul(byte, &e2, 16);
-            if (e2 == byte || *e2 != '\0') ok = false;
-            else d[i] = (uint8_t)v;
-        }
-        if (!ok) {
-            reply("ERR usage: vehicle tx <idhex> <datahex, up to 16 chars>", ctx);
-            return true;
-        }
-        CAN_FRAME f;
-        f.id = (uint32_t)id;
-        f.extended = (id > 0x7FFul) ? 1 : 0;
-        f.rtr = 0;
-        f.length = (uint8_t)(dl / 2);
-        memcpy(f.data.bytes, d, 8);
-        onTx(&Can1, f);
-        reply("OK tx", ctx);
-        return true;
-    }
-
-    if (!strcasecmp(args[0], "mf")) {
-        char msg[96];
-        snprintf(msg, sizeof(msg), "mf active=%d len=%u sent=%u sn=%u bs=%u stmin=%u",
-                 g_mf.active ? 1 : 0, g_mf.len, g_mf.sent, g_mf.sn,
-                 g_mf.bs_remaining, g_mf.stmin);
-        reply(msg, ctx);
-        return true;
-    }
-
     reply("ERR vehicle help", ctx);
     return true;
 }
@@ -574,15 +650,17 @@ void onTx(CANRaw* bus, const CAN_FRAME& tx)
 
     const bool ext = tx.extended != 0;
 
-    // Flow Control for an outstanding multi-frame TX: accepted on the same
-    // address class that started the transfer — 11-bit physical/functional
-    // (0x7E0/0x7DF) or 29-bit physical (0x18DA10F1).
-    const bool fcHere =
-        (!ext && (tx.id == 0x7E0ul || tx.id == 0x7DFul)) ||
-        (ext && tx.id == 0x18DA10F1ul);
-    if (g_mf.active && fcHere) {
-        continueMultiOnFc(bus, tx);
-        if ((tx.data.bytes[0] & 0xF0) == 0x30) return;
+    // Flow Control for an in-progress multi-frame TX.
+    // 11-bit: physical 7E0 or functional 7DF.
+    // 29-bit: physical 18DA10F1 (functional 18DB33F1 also accepted).
+    if (g_mf.active) {
+        const bool fc_addr =
+            (!ext && (tx.id == 0x7E0ul || tx.id == 0x7DFul)) ||
+            (ext && (tx.id == 0x18DA10F1ul || tx.id == 0x18DB33F1ul));
+        if (fc_addr) {
+            continueMultiOnFc(bus, tx);
+            if ((tx.data.bytes[0] & 0xF0) == 0x30) return;
+        }
     }
 
     const bool interesting =

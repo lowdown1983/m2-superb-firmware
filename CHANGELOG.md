@@ -9,27 +9,38 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
-### Fixed (2026-10-12 — sim vehicle ECU multi-frame TX flow control)
+### Fixed (2026-10-12 — sim vehicle ECU multi-frame Flow Control + PID mask,
+### merged from Grok's drop; supersedes 589c668)
 - Sim-only (`src/sim_shim/vehicle_ecu.cpp`, no `src/m2`/`src/superb` changes):
-  Flow Control Block Size is now honored — BS=0 sends all remaining CFs
-  (ISO 15765-2; preserves the previous visible behavior), BS=N emits at most
-  N CFs then waits for the next FC. FS=Wait/Overflow aborts the transfer
-  cleanly with no further CFs. STmin is parsed and stored but treated as 0
-  (no wall-clock inter-CF delay in the host sim — documented in code).
-  29-bit FC on `0x18DA10F1` is now accepted (was gated to 11-bit only, which
-  stalled 29-bit multi-frame transfers after the FF).
-- Sim test tooling (additive-only): `vehicle tx <idhex> <datahex>` console
-  command injects a raw frame straight to the scripted ECU (lets pytest drive
-  SF/FC sequences without the M2 ISO-TP client racing its own FC; responses
-  land in Can1's RX queue, keeping Can0 pristine), and `vehicle mf` reports
-  multi-frame TX state (`active/len/sent/sn/bs/stmin`).
-- Evidence: VERIFIED in sim pytest — 6 new tests (`test_z_mf_*`: BS=1
-  stop-and-wait, BS=0 send-all + BS=2 one-block, FS=1/2 abort, 29-bit FC,
-  STmin recorded-not-delayed, FC-while-idle no-op); the existing
-  `test_x_read_did_vin_multiframe` still passes through the real M2 ISO-TP
-  client (BS=0 path). Full suite 32/32 green; both sim envs build.
-- Known gap (unchanged, still open): stale `g_mf` if a new SF arrives
-  mid-transfer (startMulti overwrites it — a reset, not a hang).
+  `continueMultiOnFc` honors ISO 15765-2 Block Size — BS=0 sends all remaining
+  CFs, BS=N sends at most N then waits for the next FC. FS=Wait/Overflow
+  aborts the transfer cleanly (no further CFs). STmin is parsed and stored
+  but treated as 0 (no wall-clock inter-CF delay in the host sim —
+  documented). Flow Control accepted on 11-bit 7E0/7DF and 29-bit
+  18DA10F1/18DB33F1 (was 11-bit only, stalling 29-bit transfers after FF).
+- Mode 01 PID 0x00 mask corrected to `08 3A 80 11` (was `08 3A 80 00`, which
+  left implemented PIDs 1C/2F undiscoverable): claims 05,0B-0F,11,1C plus the
+  0x20 next-range pointer; new PID 0x20 response `00 02 00 00` advertises the
+  implemented 0x2F. Mask now exactly matches the implemented PID set.
+- Sim console: `can tx <0|1> <idHex> <dataHex>` (sendFrame → vehicle_ecu),
+  `can rx <0|1>` (drain/print RX queue, 32 frames max per call),
+  `can inject <0|1> <idHex> <dataHex>` (RX queue only, for MITM/tests).
+- Sim bus model: removed the automatic Can0↔Can1 cross-bridge on `sendFrame`
+  (it re-injected MITM forwards onto the peer controller); dual buses are
+  independent, peer traffic uses `can inject` / vehicle_ecu. `extern CANRaw
+  Can0/Can1` now declared in `due_can.h`.
+- Bee TCP `Serial.write` spins bounded (drop tail after 50 EAGAIN retries) so
+  MITMLOG cannot stall the firmware loop when the SuperB reader lags
+  (`src/sim_shim/sim_support.cpp`, sim-only policy).
+- Evidence: VERIFIED in sim pytest — new `sim/tests/test_vehicle_mf.py`
+  (BS=0 send-all, BS=1 one-CF-per-FC, BS=2 one block, FS=1/2 abort incl.
+  stays-dead, 29-bit FC continuation), `sim/tests/test_mitm.py` (drop/log/
+  default-pass rules), `sim/tests/test_obd2_poller.py` (OBD2 CSV via SuperB
+  `/api/obd2`); existing VIN multiframe test still passes through the real
+  M2 ISO-TP client (BS=0 path).
+- Known gaps (unchanged, still open): stale `g_mf` if a new SF arrives
+  mid-transfer (startMulti overwrites it — a reset, not a hang); STmin has
+  no wall-clock enforcement in the host sim.
 
 ### Changed (2026-10-12 — audit follow-ups, Marcus)
 - SuperB flash size confirmed 4 MB by Marcus (was an open hardware-audit

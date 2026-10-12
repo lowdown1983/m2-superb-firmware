@@ -6,10 +6,11 @@
 // field layout the firmware touches (.id/.extended/.length/.rtr and
 // .data.bytes[]) is identical.
 //
-// Bus model (2026-10-10 Step 2):
-//   - CAN0↔CAN1 cross-bridged on sendFrame (HARNESS physical loopback wire).
+// Bus model (2026-10-10):
+//   - Can0 and Can1 are independent (MITM dual-bus topology).
 //   - Same-controller TX is NOT echoed to own RX (avoids ISO-TP self-poison).
-//   - vehicle_ecu::onTx() may injectFrame() scripted ECU responses.
+//   - vehicle_ecu::onTx() may injectFrame() scripted ECU responses on *this.
+//   - Peer traffic for MITM tests: sim console `can inject`.
 // That is NOT a real multi-node vehicle bus (INFERRED timing/electrical).
 
 #include <Arduino.h>

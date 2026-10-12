@@ -61,6 +61,21 @@ link between them is a byte pipe through a small Python broker.
 
 Baud rate is meaningless in sim (byte pipe); 115200 is documented, not enforced.
 
+## CI gate
+
+GitHub Actions (`.github/workflows/sim-ci.yml`) on every push/PR:
+
+```bash
+pio run -e sim_m2 -e sim_superb
+python -m pytest sim/tests/ -v
+```
+
+Locally the same gate:
+
+```bash
+./sim/ci.sh
+```
+
 ## Interactive console
 
 ```bash
@@ -183,7 +198,9 @@ INFERRED values (RPM 3000, speed 80 km/h, …).
 - other SIDs → NRC 0x11
 
 Bus model: same-controller TX is not echoed to own RX (ISO-TP safe).
-CAN0↔CAN1 are cross-bridged for HARNESS selfcheck.
+CAN0 and CAN1 are independent buses (no cross-bridge since 2026-10-12;
+the bridge re-injected MITM forwards onto the peer controller). Peer
+traffic for tests uses `can inject` or the scripted `vehicle_ecu`.
 
 Tests:
 ```bash
@@ -221,21 +238,18 @@ help
 `drop both 100` makes SuperB report `m2_ok:false`; `none` recovers without
 restarting the sims. Tests: `sim/tests/test_bee_fault.py`.
 
-## CI gate (2026-10-10)
+## OBD2 poller (sim)
 
-Every push/PR to `main`/`master` runs the host-native sim gate on
-GitHub Actions (`.github/workflows/sim-ci.yml`): build `sim_m2` +
-`sim_superb`, then the full pytest suite. Local equivalent, same gate:
+`sim/tests/test_obd2_poller.py` drives console `mode obd2` + `obd2 start`
+against `vehicle_ecu`. SuperB `/api/obd2` must show CSV lines
+`ts,svc,pid,value` for 01,0C / 01,0D (and live rpm after `vehicle set`).
 
-```bash
-./sim/ci.sh
-```
+## MITM (sim)
 
-`pytest.ini` at the repo root collects `smoke.py` plus all `test_*.py`
-under `sim/tests/` (`smoke.py` was previously skipped by default test
-naming), so plain `python -m pytest sim/tests/` runs everything.
-A local pre-commit hook (untracked, `.git/hooks/pre-commit`) delegates
-to `sim/ci.sh` for sim-touching commits.
+`can inject <bus> <idHex> <dataHex>` (sim console) + `sim/tests/test_mitm.py`
+exercise drop / log / default-pass rules. CAN0 and CAN1 are independent
+(no cross-bridge), so MITM forwards never loop back onto the peer
+controller; firmware `loopWinMs` remains as defense-in-depth.
 
 ## Roadmap (deferred)
 
@@ -245,5 +259,4 @@ to `sim/ci.sh` for sim-touching commits.
 - **Fault injection:** done (broker :14003); deeper protocol-level mutators optional.
 - **J1850 timing sim:** virtual microsecond-accurate GPIO for the PWM/VPW
   driver (still INFERRED vs. silicon, but exercises the bit logic).
-- **CI:** done (GitHub Actions + `./sim/ci.sh` + local pre-commit hook);
-  deeper gates (firmware hardware-env builds) optional.
+- **CI:** done — `.github/workflows/sim-ci.yml` + local `./sim/ci.sh`.

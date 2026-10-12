@@ -10,14 +10,11 @@ bool CANRaw::sendFrame(CAN_FRAME& frame)
     if (!begun_) return false;
     frame.timestamp = millis();
 
-    // Cross-bridge CAN0↔CAN1 (physical loopback wire for HARNESS).
-    // Do NOT echo onto the transmitting controller's own RX queue — that
-    // would make ISO-TP see the tester's request as an ECU response.
-    if (this == &Can0) {
-        if (Can1.begun()) Can1.injectFrame(frame);
-    } else if (this == &Can1) {
-        if (Can0.begun()) Can0.injectFrame(frame);
-    }
+    // Dual independent buses (MITM topology). No Can0↔Can1 cross-bridge:
+    // that re-injected TX onto the peer controller and made MITM re-forward
+    // forever. HARNESS physical loopback is not modeled here — use
+    // `can inject` or vehicle_ecu for peer traffic.
+    // Do NOT echo onto the transmitting controller's own RX queue (ISO-TP).
 
     // Scripted vehicle: may injectFrame() a response onto *this.
     vehicle_ecu::onTx(this, frame);

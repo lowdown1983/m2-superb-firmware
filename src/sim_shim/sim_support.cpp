@@ -182,16 +182,21 @@ size_t HardwareSerial::write(const uint8_t* buf, size_t size) {
     }
     if (fd_ < 0) return 0;
     size_t sent = 0;
+    // Bounded spin: MITMLOG/CSV can outrun the SuperB reader; never block
+    // the firmware loop forever on a full TCP window (sim-only policy).
+    int spins = 0;
     while (sent < size) {
         ssize_t n = send(fd_, buf + sent, size - sent, MSG_NOSIGNAL);
         if (n <= 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (++spins > 50) break;  // drop remainder
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             }
             close(fd_); fd_ = -1;
             break;
         }
+        spins = 0;
         sent += (size_t)n;
     }
     return sent;
