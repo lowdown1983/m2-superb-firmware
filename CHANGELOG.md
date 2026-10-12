@@ -9,6 +9,14 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Changed (2026-10-12 — audit follow-ups, Marcus)
+- SuperB flash size confirmed 4 MB by Marcus (was an open hardware-audit
+  question; `platformio.ini` now records it as VERIFIED).
+- CAN baud allowlist (`ModeManager::validCanBaud`) now accepts 95200
+  (GM GMLAN mid-speed 95.2 kbit/s, per Marcus). due_can selects TQ=9 /
+  prescaler 98 at 84 MHz → 95238 baud (+0.040%, within tolerance), using
+  the valid 9-TQ table row.
+
 ### Audits (2026-10-12 — ChatGPT due_can timing audit filed)
 - Filed `docs/audits/chatgpt-2026-10-12-duecan.md` (verbatim report +
   verification notes; audited tree `9899bb0`). Headline: **MAJOR,

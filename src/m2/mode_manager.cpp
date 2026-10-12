@@ -2123,8 +2123,9 @@ void ModeManager::mmGetStatus(uint8_t& mode, uint32_t& c0, uint32_t& c1,
 
 static bool validCanBaud(uint32_t b)
 {
-    return b == 100000 || b == 125000 || b == 250000 || b == 500000 ||
-           b == 800000 || b == 1000000;
+    // 95200 = GM GMLAN mid-speed 95.2 kbit/s (Marcus 2026-10-12).
+    return b == 95200 || b == 100000 || b == 125000 || b == 250000 ||
+           b == 500000 || b == 800000 || b == 1000000;
 }
 
 uint8_t ModeManager::mmSetCanBaud(uint8_t bus, uint32_t baud, uint8_t& applied)
