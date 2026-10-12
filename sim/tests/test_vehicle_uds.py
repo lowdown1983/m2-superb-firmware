@@ -11,6 +11,7 @@ Drives the M2 console (SerialUSB → stdin/stdout of sim_m2):
 Requires: pio run -e sim_m2 -e sim_superb
 """
 import os
+import re
 import select
 import socket
 import subprocess
@@ -215,3 +216,126 @@ def test_y_unsupported_service_nrc(uds_console):
     assert b"NO DATA" not in out, "no ECU response: %r" % out[-300:]
     assert b"7F" in out, "expected negative response: %r" % out[-300:]
     print("PASS: unsupported SID -> NRC 0x7F")
+
+
+# --- Multi-frame TX flow-control tests (2026-10-12) ---
+# Drive the scripted ECU directly with raw SF/FC frames via the test-only
+# `vehicle tx` console command (bypasses the virtual bus, so the M2 ISO-TP
+# client never races its own FC). `vehicle mf` reports transfer state.
+# These run last (test_z_*) so Can1 RX-queue residue cannot affect earlier
+# tests; the fixture is module-scoped.
+
+def _vehicle_cmd(m2, con, line: bytes, needle: bytes = b"OK", timeout=8):
+    m2.stdin.write(line if line.endswith(b"\n") else line + b"\n")
+    m2.stdin.flush()
+    return con.expect(needle, timeout=timeout)
+
+
+def _mf_state(m2, con):
+    # expect() returns up to and including the needle, so grab the rest of
+    # the state line with a second expect for the line terminator.
+    m2.stdin.write(b"vehicle mf\n")
+    m2.stdin.flush()
+    con.expect(b"mf active=", timeout=8)
+    tail = con.expect(b"\n", timeout=8)
+    line = b"mf active=" + tail
+    m = re.search(
+        rb"mf active=(\d+) len=(\d+) sent=(\d+) sn=(\d+) bs=(\d+) stmin=(\d+)",
+        line)
+    assert m, "could not parse mf state from %r" % line[-200:]
+    keys = ("active", "len", "sent", "sn", "bs", "stmin")
+    return {k: int(v) for k, v in zip(keys, m.groups())}
+
+
+VIN_SF = b"vehicle tx 7E0 0322F19000000000"  # 03 22 F1 90
+
+
+def test_z_mf_bs1_stop_and_wait(uds_console):
+    """BS=1: exactly one CF per FC; transfer stays active until final FC."""
+    m2, con = uds_console
+    con.drain(0.2)
+    _vehicle_cmd(m2, con, VIN_SF)
+    st = _mf_state(m2, con)
+    assert st["active"] == 1 and st["sent"] == 6, st
+
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 3001000000000000")  # FC BS=1
+    st = _mf_state(m2, con)
+    assert st["active"] == 1 and st["sent"] == 13, st  # one 7-byte CF
+
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 3001000000000000")  # FC BS=1
+    st = _mf_state(m2, con)
+    assert st["active"] == 0 and st["sent"] == 20, st
+    print("PASS: BS=1 stop-and-wait")
+
+
+def test_z_mf_bs0_send_all_and_bs2(uds_console):
+    """BS=0 sends everything (ISO 15765-2); BS=2 takes both CFs in one block."""
+    m2, con = uds_console
+    con.drain(0.2)
+    _vehicle_cmd(m2, con, VIN_SF)
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 3000000000000000")  # FC BS=0
+    st = _mf_state(m2, con)
+    assert st["active"] == 0 and st["sent"] == 20, st
+
+    _vehicle_cmd(m2, con, VIN_SF)
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 3002000000000000")  # FC BS=2
+    st = _mf_state(m2, con)
+    assert st["active"] == 0 and st["sent"] == 20, st
+    print("PASS: BS=0 send-all, BS=2 one block")
+
+
+def test_z_mf_fs_abort(uds_console):
+    """FS=Wait(1)/Overflow(2) aborts the transfer; no further CFs."""
+    m2, con = uds_console
+    con.drain(0.2)
+    _vehicle_cmd(m2, con, VIN_SF)
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 3100000000000000")  # FS=Wait
+    st = _mf_state(m2, con)
+    assert st["active"] == 0 and st["sent"] == 6, st
+
+    _vehicle_cmd(m2, con, VIN_SF)
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 3200000000000000")  # FS=Overflow
+    st = _mf_state(m2, con)
+    assert st["active"] == 0 and st["sent"] == 6, st
+    print("PASS: FS=1/2 aborts transfer")
+
+
+def test_z_mf_29bit_fc(uds_console):
+    """29-bit FC on 18DA10F1 continues a 29-bit transfer (was gated out)."""
+    m2, con = uds_console
+    con.drain(0.2)
+    _vehicle_cmd(m2, con, b"vehicle tx 18DA10F1 0322F19000000000")
+    st = _mf_state(m2, con)
+    assert st["active"] == 1 and st["sent"] == 6, st
+
+    _vehicle_cmd(m2, con, b"vehicle tx 18DA10F1 3001000000000000")  # BS=1
+    st = _mf_state(m2, con)
+    assert st["active"] == 1 and st["sent"] == 13, st
+
+    _vehicle_cmd(m2, con, b"vehicle tx 18DA10F1 3000000000000000")  # BS=0
+    st = _mf_state(m2, con)
+    assert st["active"] == 0 and st["sent"] == 20, st
+    print("PASS: 29-bit FC honored")
+
+
+def test_z_mf_stmin_recorded_not_delayed(uds_console):
+    """STmin is parsed/stored but treated as 0 (no inter-CF delay)."""
+    m2, con = uds_console
+    con.drain(0.2)
+    _vehicle_cmd(m2, con, VIN_SF)
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 30017F0000000000")  # BS=1 STmin=7F
+    st = _mf_state(m2, con)
+    assert st["stmin"] == 0x7F, st
+    assert st["sent"] == 13 and st["active"] == 1, st  # BS honored, no stall
+    print("PASS: STmin recorded, treated as 0")
+
+
+def test_z_mf_fc_when_idle_noop(uds_console):
+    """FC with no active transfer is a no-op."""
+    m2, con = uds_console
+    con.drain(0.2)
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 3100000000000000")  # abort straggler
+    _vehicle_cmd(m2, con, b"vehicle tx 7E0 3000000000000000")  # FC while idle
+    st = _mf_state(m2, con)
+    assert st["active"] == 0, st
+    print("PASS: FC while idle is no-op")

@@ -9,6 +9,28 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Fixed (2026-10-12 — sim vehicle ECU multi-frame TX flow control)
+- Sim-only (`src/sim_shim/vehicle_ecu.cpp`, no `src/m2`/`src/superb` changes):
+  Flow Control Block Size is now honored — BS=0 sends all remaining CFs
+  (ISO 15765-2; preserves the previous visible behavior), BS=N emits at most
+  N CFs then waits for the next FC. FS=Wait/Overflow aborts the transfer
+  cleanly with no further CFs. STmin is parsed and stored but treated as 0
+  (no wall-clock inter-CF delay in the host sim — documented in code).
+  29-bit FC on `0x18DA10F1` is now accepted (was gated to 11-bit only, which
+  stalled 29-bit multi-frame transfers after the FF).
+- Sim test tooling (additive-only): `vehicle tx <idhex> <datahex>` console
+  command injects a raw frame straight to the scripted ECU (lets pytest drive
+  SF/FC sequences without the M2 ISO-TP client racing its own FC; responses
+  land in Can1's RX queue, keeping Can0 pristine), and `vehicle mf` reports
+  multi-frame TX state (`active/len/sent/sn/bs/stmin`).
+- Evidence: VERIFIED in sim pytest — 6 new tests (`test_z_mf_*`: BS=1
+  stop-and-wait, BS=0 send-all + BS=2 one-block, FS=1/2 abort, 29-bit FC,
+  STmin recorded-not-delayed, FC-while-idle no-op); the existing
+  `test_x_read_did_vin_multiframe` still passes through the real M2 ISO-TP
+  client (BS=0 path). Full suite 32/32 green; both sim envs build.
+- Known gap (unchanged, still open): stale `g_mf` if a new SF arrives
+  mid-transfer (startMulti overwrites it — a reset, not a hang).
+
 ### Changed (2026-10-12 — audit follow-ups, Marcus)
 - SuperB flash size confirmed 4 MB by Marcus (was an open hardware-audit
   question; `platformio.ini` now records it as VERIFIED).

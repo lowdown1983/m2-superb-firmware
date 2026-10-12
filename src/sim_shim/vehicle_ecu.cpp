@@ -5,6 +5,9 @@
 #include <string.h>
 #include <ctype.h>
 
+// Sim bus instances live in SimCAN_globals.cpp at global scope.
+extern CANRaw Can1;
+
 namespace vehicle_ecu {
 namespace {
 
@@ -112,6 +115,8 @@ struct MfPending {
     uint16_t len;
     uint16_t sent;
     uint8_t sn;
+    uint8_t bs_remaining;  // last FC's Block Size (0 = send all remaining)
+    uint8_t stmin;         // last FC's STmin, recorded; treated as 0 in host sim
 };
 MfPending g_mf = {};
 
@@ -154,6 +159,8 @@ void startMulti(CANRaw* bus, uint32_t id, bool ext,
     g_mf.id = id;
     g_mf.ext = ext;
     g_mf.sn = 1;
+    g_mf.bs_remaining = 0;
+    g_mf.stmin = 0;
     g_mf.active = true;
 
     uint8_t ff[8];
@@ -165,23 +172,40 @@ void startMulti(CANRaw* bus, uint32_t id, bool ext,
     injectRaw(bus, id, ext, ff);
 }
 
-void continueMultiOnFc(CANRaw* bus, const CAN_FRAME& tx)
+// Emit up to `budget` consecutive frames (budget == 0 → all remaining,
+// per ISO 15765-2 Block Size semantics). STmin is intentionally not delayed:
+// the host sim has no meaningful microsecond clock for inter-CF gaps, so
+// STmin is parsed and stored but treated as 0 (documented limitation).
+void emitCfBlock(uint8_t budget)
 {
-    if (!g_mf.active || bus != g_mf.bus) return;
-    if ((tx.data.bytes[0] & 0xF0) != 0x30) return;
-
-    while (g_mf.sent < g_mf.len) {
+    uint8_t n = budget;
+    while (g_mf.sent < g_mf.len && (budget == 0 || n > 0)) {
         uint8_t cf[8];
         memset(cf, 0, 8);
         cf[0] = 0x20 | (g_mf.sn & 0x0F);
-        uint8_t n = (uint8_t)((g_mf.len - g_mf.sent > 7)
-                                  ? 7 : (g_mf.len - g_mf.sent));
-        memcpy(cf + 1, g_mf.data + g_mf.sent, n);
+        uint8_t cnt = (uint8_t)((g_mf.len - g_mf.sent > 7)
+                                   ? 7 : (g_mf.len - g_mf.sent));
+        memcpy(cf + 1, g_mf.data + g_mf.sent, cnt);
         injectRaw(g_mf.bus, g_mf.id, g_mf.ext, cf);
-        g_mf.sent = (uint16_t)(g_mf.sent + n);
+        g_mf.sent = (uint16_t)(g_mf.sent + cnt);
         g_mf.sn = (uint8_t)((g_mf.sn + 1) & 0x0F);
+        if (budget != 0) n--;
     }
-    g_mf.active = false;
+    if (g_mf.sent >= g_mf.len) g_mf.active = false;
+}
+
+void continueMultiOnFc(CANRaw* bus, const CAN_FRAME& tx)
+{
+    if (!g_mf.active || bus != g_mf.bus) return;
+    if (tx.length < 1 || (tx.data.bytes[0] & 0xF0) != 0x30) return;
+    // Flow Status: 0 = ContinueToSend; 1 = Wait, 2 = Overflow → abort the
+    // transfer cleanly, no further CFs (ISO 15765-2).
+    if ((tx.data.bytes[0] & 0x0F) != 0) { g_mf.active = false; return; }
+    if (tx.length < 3) return;  // malformed FC: BS + STmin bytes required
+    uint8_t bs = tx.data.bytes[1];
+    g_mf.stmin = tx.data.bytes[2];  // recorded; treated as 0 (see above)
+    g_mf.bs_remaining = bs;
+    emitCfBlock(bs);
 }
 
 uint8_t buildMode01(uint8_t pid, uint8_t* out, uint8_t outMax)
@@ -403,10 +427,12 @@ bool handleConsoleLine(const char* line,
         args[nargs++] = t;
     }
 
-    if (nargs == 0 || !strcasecmp(args[0], "help")) {
+    if (!strcasecmp(args[0], "help")) {
         reply("vehicle set  rpm|speed|coolant|throttle <value>", ctx);
         reply("vehicle ramp rpm|speed|coolant|throttle <from> <to> <steps>", ctx);
         reply("vehicle show", ctx);
+        reply("vehicle tx   <idhex> <datahex>  (test-only raw frame to scripted ECU)", ctx);
+        reply("vehicle mf   (multi-frame TX state)", ctx);
         return true;
     }
 
@@ -494,6 +520,48 @@ bool handleConsoleLine(const char* line,
         return true;
     }
 
+    // Test-only raw frame injection, straight to the scripted ECU.
+    // Lets pytest drive SF/FC sequences (BS=1, FS abort, 29-bit FC) without
+    // the M2 ISO-TP client racing its own FC. Delivered via onTx(&Can1, ...)
+    // so responses land in Can1's RX queue, keeping Can0 pristine.
+    if (!strcasecmp(args[0], "tx") && nargs >= 3) {
+        char* end = nullptr;
+        unsigned long id = strtoul(args[1], &end, 16);
+        size_t dl = strlen(args[2]);
+        bool ok = (end != args[1] && *end == '\0' && id <= 0x1FFFFFFFul &&
+                   dl > 0 && dl <= 16 && (dl & 1) == 0);
+        uint8_t d[8] = {};
+        for (size_t i = 0; ok && i < dl / 2; i++) {
+            char byte[3] = { args[2][2 * i], args[2][2 * i + 1], '\0' };
+            char* e2 = nullptr;
+            unsigned long v = strtoul(byte, &e2, 16);
+            if (e2 == byte || *e2 != '\0') ok = false;
+            else d[i] = (uint8_t)v;
+        }
+        if (!ok) {
+            reply("ERR usage: vehicle tx <idhex> <datahex, up to 16 chars>", ctx);
+            return true;
+        }
+        CAN_FRAME f;
+        f.id = (uint32_t)id;
+        f.extended = (id > 0x7FFul) ? 1 : 0;
+        f.rtr = 0;
+        f.length = (uint8_t)(dl / 2);
+        memcpy(f.data.bytes, d, 8);
+        onTx(&Can1, f);
+        reply("OK tx", ctx);
+        return true;
+    }
+
+    if (!strcasecmp(args[0], "mf")) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "mf active=%d len=%u sent=%u sn=%u bs=%u stmin=%u",
+                 g_mf.active ? 1 : 0, g_mf.len, g_mf.sent, g_mf.sn,
+                 g_mf.bs_remaining, g_mf.stmin);
+        reply(msg, ctx);
+        return true;
+    }
+
     reply("ERR vehicle help", ctx);
     return true;
 }
@@ -506,8 +574,13 @@ void onTx(CANRaw* bus, const CAN_FRAME& tx)
 
     const bool ext = tx.extended != 0;
 
-    if (g_mf.active &&
-        (!ext && (tx.id == 0x7E0ul || tx.id == 0x7DFul))) {
+    // Flow Control for an outstanding multi-frame TX: accepted on the same
+    // address class that started the transfer — 11-bit physical/functional
+    // (0x7E0/0x7DF) or 29-bit physical (0x18DA10F1).
+    const bool fcHere =
+        (!ext && (tx.id == 0x7E0ul || tx.id == 0x7DFul)) ||
+        (ext && tx.id == 0x18DA10F1ul);
+    if (g_mf.active && fcHere) {
         continueMultiOnFc(bus, tx);
         if ((tx.data.bytes[0] & 0xF0) == 0x30) return;
     }

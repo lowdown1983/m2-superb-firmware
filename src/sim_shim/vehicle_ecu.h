@@ -10,6 +10,10 @@
 //   vehicle set  rpm|speed|coolant|throttle <value>
 //   vehicle ramp rpm|speed|coolant|throttle <from> <to> <steps>
 //   vehicle show
+//   vehicle tx   <idhex> <datahex>  (test-only: raw frame straight to the
+//                scripted ECU; drives SF/FC sequences without the M2
+//                ISO-TP client racing its own FC)
+//   vehicle mf   (multi-frame TX state: active/len/sent/sn/bs/stmin)
 // Ramp advances one step each time that signal is read (OBD PID request).
 // Purpose: encoding-boundary sweeps, not a car model.
 //
