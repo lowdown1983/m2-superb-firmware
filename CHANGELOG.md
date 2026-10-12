@@ -9,6 +9,22 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Fixed (2026-10-12 — due_can timing fork, from ChatGPT 2026-10-12 audit)
+- Vendored `collin80/due_can@2.1.6` into `lib/due_can/` (see
+  `lib/due_can/README.md`) with the 8-TQ timing row corrected: SJW 3 → 2,
+  fixing the VERIFIED SJW <= min(PH1, PH2) violation that affected
+  100/125/250/500 kbit/s at 84 MHz (incl. the 500k default). Fix is at the
+  source (the table), not a post-`begin()` register override — the override
+  approach was tried 2026-10-11 and regressed in the vehicle. `can_common`
+  stays on the registry; `platformio.ini` `lib_deps` updated in both envs.
+- New regression test `sim/tests/test_duecan_timing.py`: every table row
+  must satisfy SJW <= min(PH1, PH2); 8-TQ row pinned to SJW=2; the row
+  selected for each supported baud (95200–1M) must be valid with <1% baud
+  error.
+- Evidence: all 4 envs build clean against the fork (verified
+  `lib/due_can` in the include path, registry copy removed), 43/43 sim
+  tests pass. Bench/vehicle validation of the new timing still to do.
+
 ### Fixed (2026-10-12 — sim vehicle ECU multi-frame Flow Control + PID mask,
 ### merged from Grok's drop; supersedes 589c668)
 - Sim-only (`src/sim_shim/vehicle_ecu.cpp`, no `src/m2`/`src/superb` changes):
