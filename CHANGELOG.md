@@ -9,6 +9,21 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Audits (2026-10-12 — ChatGPT due_can timing audit filed)
+- Filed `docs/audits/chatgpt-2026-10-12-duecan.md` (verbatim report +
+  verification notes; audited tree `9899bb0`). Headline: **MAJOR,
+  VERIFIED** — pinned `due_can@2.1.6`'s 8-TQ timing row sets SJW=3 with
+  PH1=PH2=2, violating SJW <= min(PH1, PH2) (struct documents
+  `min(phase1, 4)`); the TQ selector picks this row for 100/125/250/500
+  kbit/s at 84 MHz, so the default 500k native CAN uses it. Impact
+  INFERRED (reduced sync tolerance; the Bolt communicates today).
+  Explicitly NOT a post-`begin()` register override — that was tried
+  (`4504922`) and regressed in the vehicle. Recommended fix: maintained
+  due_can fork with the 8-TQ SJW corrected to 2 + table-constraint unit
+  test, bench-validated before vehicle use. Prior SWCAN audit fixes
+  confirmed present. Open questions filed: GM 95.2k mid-speed rate,
+  SuperB flash size.
+
 ### Fixed (2026-10-12 — SWCAN recovery hardening, from ChatGPT 2026-10-11 audit)
 - Bus-off recovery (`src/m2/swcan.cpp`) no longer forces `MODE_NORMAL`
   unconditionally: it now restores the *requested* mode via
