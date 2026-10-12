@@ -9,6 +9,29 @@ work landed, per the phase notes and audit reports in `docs/` and
 
 ## [Unreleased]
 
+### Fixed (2026-10-12 — SWCAN recovery hardening, from ChatGPT 2026-10-11 audit)
+- Bus-off recovery (`src/m2/swcan.cpp`) no longer forces `MODE_NORMAL`
+  unconditionally: it now restores the *requested* mode via
+  `hw.setListenOnlyMode(wantListenOnly)`, so a listen-only session comes
+  back listen-only instead of ACKing. Inlined (not `applyListenOnly()`)
+  because the SPI-arbiter `noInterrupts()` section is already held and
+  Arduino interrupt guards don't nest.
+- `recover()` now sleeps the TH8056 *before* MCP2515 Reset/Init (which
+  leaves the controller in normal mode), applies listen-only while the
+  transceiver is asleep, then restores the prior transceiver mode —
+  mirroring `acquire()`'s safe ordering. Eliminates the window where a
+  passive session's controller sat in normal mode on a live bus.
+- Failed `recover()` now rolls back: transceiver left asleep, `isAcquired`
+  cleared, SWCAN presence cleared; IRQ stays detached until a fresh
+  `acquire()`. Previously left a stale-present, no-RX-interrupt zombie.
+- Evidence: all 4 envs build clean, 26/26 sim tests pass (sim has no
+  MCP2515 register mocks — the recovery path is not exercised on host;
+  verification is by build + review against datasheet ordering).
+  Adversarial review: no functional findings. Notes: Normal→Sleep settle
+  uses the 100 ms VERIFIED minimum (datasheet range 100–500 ms, pre-existing
+  assumption shared with `release()`); `Mode()` return unchecked (pre-existing
+  pattern); register-mock test for the bus-off branch remains future work.
+
 ### Fixed (2026-10-10 — ELM327 genuine-behavior deviations, found by differential probe)
 - `reply()` now terminates text replies `\r\r>` like a genuine ELM327 (was
   `\r>`); ATZ prints `\rELM327 v1.5\r` so its framing is also `\r\r>`.

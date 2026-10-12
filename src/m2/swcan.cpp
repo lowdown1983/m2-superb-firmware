@@ -308,21 +308,28 @@ void poll()
     }
     badReads = 0;
     // Bus-off: EFLG.TXBO. The MCP2515 auto-recovers after 128x11 recessive
-    // bits per its datasheet; we count it, log it, and re-request normal
-    // mode to make sure we come back in the mode we expect.
+    // bits per its datasheet; we count it, log it, and re-request the
+    // mode we expect.
     if (eflg & EFLG_TXBO) {
         busstat::noteBusOff(busstat::Bus::SWCAN);
         dbg::print(F("[swcan] BUS-OFF (TEC="));
         dbg::print((uint32_t)tec);
-        dbg::println(F("), re-requesting NORMAL"));
+        dbg::print(F("), re-requesting "));
+        dbg::println(wantListenOnly ? F("LISTEN-ONLY") : F("NORMAL"));
         noInterrupts();  // SPI ARBITER
         // W-5: clear stale error flags and abort any queued TX *before*
-        // re-requesting NORMAL — otherwise a bus-off caused by a flooding
+        // re-requesting the mode — otherwise a bus-off caused by a flooding
         // txsched slot would resume transmitting the stale queue the
         // moment the controller recovers (128x11 recessive bits later).
         hw.Write(EFLG, 0x00);
         hw.Write(CANCTRL, (uint8_t)(hw.Read(CANCTRL) | CANCTRL_ABAT));
-        hw.Mode(MODE_NORMAL);
+        // 2026-10-12 (audit F-1): restore the REQUESTED mode, not
+        // unconditionally NORMAL. A listen-only session must come back
+        // listen-only — never ACKing. Inlined as hw.setListenOnlyMode()
+        // (SPI-only, no interrupt toggling) rather than applyListenOnly(),
+        // because noInterrupts() does not nest on Arduino and the arbiter
+        // is already held here.
+        hw.setListenOnlyMode(wantListenOnly);
         interrupts();
     } else if (eflg & (EFLG_TXWAR | EFLG_RXWAR | EFLG_EWARN)) {
         dbg::print(F("[swcan] error-warning, EFLG="));
@@ -342,6 +349,15 @@ bool recover()
     return true;  // nothing to recover on the host shim
 #else
     detachInterrupt(SWC_INT);
+    // 2026-10-12 (audit F-2): sleep the TH8056 BEFORE Reset/Init.
+    // hw.Init() leaves the MCP2515 in MODE_NORMAL; with the transceiver
+    // awake that exposes a live bus to a normal-mode controller (hardware
+    // ACKs) until applyListenOnly() runs. Mirrors acquire()'s safe ordering:
+    // listen-only is established while the transceiver is still asleep.
+    Mode was = curMode;
+    driveModePins(Mode::SLEEP);
+    settleFor(was, Mode::SLEEP);
+    curMode = Mode::SLEEP;
     // SPI ARBITER: reset + re-init is one guarded sequence (the ISR is
     // already detached, but the guard documents the invariant).
     noInterrupts();
@@ -354,13 +370,18 @@ bool recover()
     interrupts();
     if (!healthy) {
         dbg::println(F("[swcan] recover FAILED"));
+        // 2026-10-12 (audit F-3): roll back on failure — the transceiver is
+        // already asleep above, so just clear ownership. The IRQ stays
+        // detached and SWCAN reports absent until a fresh acquire().
+        isAcquired = false;
+        busstat::setPresent(busstat::Bus::SWCAN, false);
         return false;
     }
     applyListenOnly();
-    // Re-apply the TH8056 mode we were in (default NORMAL).
-    Mode m = curMode;
-    driveModePins(m);
-    settleFor(Mode::SLEEP, m);
+    // Re-apply the TH8056 mode we were in.
+    driveModePins(was);
+    settleFor(Mode::SLEEP, was);
+    curMode = was;
     attachInterrupt(SWC_INT, isrTrampoline, FALLING);
     dbg::println(F("[swcan] recover OK"));
     return true;
